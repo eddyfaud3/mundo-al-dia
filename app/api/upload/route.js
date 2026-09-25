@@ -6,13 +6,20 @@ import { cookieName, validToken } from "../../../lib/auth";
 export const runtime = "nodejs";
 
 function getCloudinaryConfig() {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim();
+  const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
+  const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();
+
+  if (cloudName && apiKey && apiSecret) {
+    return { cloudName, apiKey, apiSecret };
+  }
+
   let value = process.env.CLOUDINARY_URL?.trim();
 
   if (!value) {
-    throw new Error("CLOUDINARY_URL no está configurada.");
+    throw new Error("Falta la configuración de Cloudinary. En Railway agrega CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY y CLOUDINARY_API_SECRET.");
   }
 
-  // Accept common ways the value may have been pasted into Railway.
   value = value.replace(/^CLOUDINARY_URL\s*=\s*/i, "").trim();
   value = value.replace(/^['"]|['"]$/g, "").trim();
 
@@ -24,18 +31,22 @@ function getCloudinaryConfig() {
   const colon = value.indexOf(":");
 
   if (colon <= 0 || at <= colon + 1 || at === value.length - 1) {
-    throw new Error("CLOUDINARY_URL no tiene las credenciales completas.");
+    throw new Error("La configuración de Cloudinary no es válida. Usa las tres variables separadas en Railway.");
   }
 
-  const apiKey = value.slice(0, colon).trim();
-  const apiSecret = value.slice(colon + 1, at).trim();
-  const cloudName = value.slice(at + 1).trim().replace(/\/$/, "");
+  const parsedApiKey = value.slice(0, colon).trim();
+  const parsedApiSecret = value.slice(colon + 1, at).trim();
+  const parsedCloudName = value.slice(at + 1).trim().replace(/\/$/, "");
 
-  if (!apiKey || !apiSecret || !cloudName) {
-    throw new Error("Cloudinary no pudo obtener las credenciales desde CLOUDINARY_URL.");
+  if (!parsedApiKey || !parsedApiSecret || !parsedCloudName) {
+    throw new Error("La configuración de Cloudinary está incompleta. Usa las tres variables separadas en Railway.");
   }
 
-  return { cloudName, apiKey, apiSecret };
+  return {
+    cloudName: decodeURIComponent(parsedCloudName),
+    apiKey: decodeURIComponent(parsedApiKey),
+    apiSecret: decodeURIComponent(parsedApiSecret),
+  };
 }
 
 export async function POST() {
