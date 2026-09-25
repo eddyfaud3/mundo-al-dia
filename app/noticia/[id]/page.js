@@ -107,6 +107,29 @@ export default async function NoticiaPage({ params }) {
       ? /\.(mp4|webm|ogg)(\?.*)?$/i.test(noticia.video_url)
       : false;
 
+  const articleSchema = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: noticia.title,
+    description: noticia.excerpt || "Lee las últimas noticias en Mundo al Día.",
+    datePublished: noticia.created_at ? new Date(noticia.created_at).toISOString() : undefined,
+    dateModified: noticia.updated_at ? new Date(noticia.updated_at).toISOString() : (noticia.created_at ? new Date(noticia.created_at).toISOString() : undefined),
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": `https://mundo-al-dia-github-production.up.railway.app/noticia/${noticia.slug}`
+    },
+    author: {
+      "@type": "Organization",
+      name: "Mundo al Día"
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "Mundo al Día"
+    },
+    image: noticia.image_url ? [noticia.image_url] : undefined,
+    articleSection: noticia.category || "Mundo"
+  };
+
   return (
     <main>
       <header className="header">
