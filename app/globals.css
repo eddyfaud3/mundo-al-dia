@@ -198,3 +198,44 @@ footer p {
     grid-template-columns: 1fr;
   }
 }
+
+.search-wrap {
+  margin-top: 24px;
+}
+
+.search-wrap > label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 800;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  border: 1px solid #dbe3ee;
+  border-radius: 12px;
+  padding: 0 16px;
+  max-width: 720px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
+}
+
+.search-box input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  padding: 15px 0;
+  font-size: 16px;
+  background: transparent;
+}
+
+.search-count {
+  color: #64748b;
+  margin: 14px 0 20px;
+}
+
+.no-results {
+  padding: 28px 0;
+  color: #64748b;
+}
