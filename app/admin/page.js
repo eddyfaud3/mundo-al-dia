@@ -12,6 +12,8 @@ export default function AdminPage(){
   const [loading,setLoading]=useState(true);
   const [uploading,setUploading]=useState(false);
   const [uploadMessage,setUploadMessage]=useState("");
+  const [facebook,setFacebook]=useState({configured:false,connected:false,pageName:""});
+  const [facebookMessage,setFacebookMessage]=useState("");
 
   async function load(){
     setLoading(true);
@@ -21,7 +23,28 @@ export default function AdminPage(){
     if(!r.ok){setError(d.error||"Error");setLoading(false);return;}
     setArticles(d);setLoading(false);
   }
-  useEffect(()=>{load()},[]);
+
+  async function loadFacebook(){
+    const r=await fetch("/api/facebook/status",{cache:"no-store"});
+    if(r.status===401){location.href="/admin/login";return;}
+    if(r.ok)setFacebook(await r.json());
+  }
+
+  useEffect(()=>{
+    load();
+    loadFacebook();
+    const params=new URLSearchParams(location.search);
+    const fb=params.get("facebook");
+    const name=params.get("name");
+    if(fb==="connected"){
+      setFacebookMessage(`✅ Facebook conectado: ${name||"Mundo al Día"}`);
+      loadFacebook();
+      history.replaceState({}, "", "/admin");
+    }else if(fb==="error"){
+      setFacebookMessage("❌ No se pudo conectar Facebook. Revisa la configuración de Meta en Railway.");
+      history.replaceState({}, "", "/admin");
+    }
+  },[]);
 
   function edit(a){setEditing(a.id);setForm({...a});window.scrollTo({top:0,behavior:"smooth"});}
   function change(e){const {name,value,type,checked}=e.target;setForm({...form,[name]:type==="checkbox"?checked:value});}
@@ -63,13 +86,18 @@ export default function AdminPage(){
   }
 
   async function save(e){
-    e.preventDefault();setError("");setUploadMessage("");
+    e.preventDefault();setError("");setUploadMessage("");setFacebookMessage("");
     if(!form.title.trim()||!form.slug.trim()){setError("Título y slug son obligatorios.");return;}
     const r=await fetch(editing?"/api/admin/articles/"+editing:"/api/admin/articles",{
       method:editing?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)
     });
     const d=await r.json();
     if(!r.ok){setError(d.error||"No se pudo guardar.");return;}
+    if(d.facebook?.published){
+      setFacebookMessage(`✅ Publicado automáticamente en Facebook: ${facebook.pageName||"Mundo al Día"}`);
+    }else if(form.published && d.facebook?.reason){
+      setFacebookMessage(`⚠️ La noticia se publicó en el sitio, pero Facebook no publicó: ${d.facebook.reason}`);
+    }
     setForm(empty);setEditing(null);await load();
   }
 
@@ -81,12 +109,40 @@ export default function AdminPage(){
 
   async function logout(){await fetch("/api/admin/logout",{method:"POST"});location.href="/admin/login";}
 
+  async function disconnectFacebook(){
+    if(!confirm("¿Desconectar Facebook de Mundo al Día?"))return;
+    const r=await fetch("/api/facebook/disconnect",{method:"POST"});
+    if(r.ok){
+      setFacebook({configured:true,connected:false,pageName:""});
+      setFacebookMessage("Facebook desconectado.");
+    }
+  }
+
   return <main className="admin-page">
     <div className="admin-container">
     <header style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap"}}>
       <div><h1>🌎 Mundo al Día — Admin</h1><p>Gestiona tus noticias.</p></div>
       <div><a href="/" style={{marginRight:15}}>Ver sitio</a><button onClick={logout}>Cerrar sesión</button></div>
     </header>
+
+    <section style={{border:"1px solid #ddd",borderRadius:12,padding:20,marginTop:20}}>
+      <h2>📘 Publicación automática en Facebook</h2>
+      {!facebook.configured ? (
+        <p>⚠️ Falta configurar la aplicación de Meta en Railway.</p>
+      ) : facebook.connected ? (
+        <div>
+          <p>✅ Conectado a la página <strong>{facebook.pageName}</strong>.</p>
+          <p style={{fontSize:14}}>Cuando publiques una noticia nueva, Mundo al Día intentará publicarla automáticamente en Facebook.</p>
+          <button type="button" onClick={disconnectFacebook}>Desconectar Facebook</button>
+        </div>
+      ) : (
+        <div>
+          <p>Conecta tu página de Facebook para activar la publicación automática.</p>
+          <a className="button" href="/api/facebook/connect">🔗 Conectar Facebook</a>
+        </div>
+      )}
+      {facebookMessage&&<p style={{marginTop:12}}>{facebookMessage}</p>}
+    </section>
 
     <section style={{border:"1px solid #ddd",borderRadius:12,padding:20,marginTop:20}}>
       <h2>{editing?"Editar noticia":"Nueva noticia"}</h2>
@@ -117,7 +173,7 @@ export default function AdminPage(){
       <h2>Noticias</h2>
       {loading?<p>Cargando...</p>:articles.length===0?<p>No hay noticias todavía.</p>:articles.map(a=>
         <article key={a.id} style={{borderBottom:"1px solid #ddd",padding:"16px 0"}}>
-          <strong>{a.title}</strong> — {a.category} — {a.published?"✅ Publicada":"⏸️ Borrador"}
+          <strong>{a.title}</strong> — {a.category} — {a.published?"✅ Publicada":"⏸️ Borrador"} {a.facebook_post_id&&"— 📘 Facebook"}
           <div style={{marginTop:8}}><button onClick={()=>edit(a)}>Editar</button>{" "}<button onClick={()=>remove(a.id)}>Eliminar</button></div>
         </article>
       )}
