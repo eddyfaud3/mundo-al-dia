@@ -282,3 +282,130 @@ a {
     max-height: 430px;
   }
 }
+
+
+.admin-page {
+  min-height: 100vh;
+  background: #f1f5f9;
+  padding: 30px 0 60px;
+}
+
+.admin-container {
+  width: min(1100px, 92%);
+  margin: 0 auto;
+}
+
+.admin-page header {
+  background: #0b1220;
+  color: white;
+  padding: 24px;
+  border-radius: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-page header h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+}
+
+.admin-page header p {
+  margin: 0;
+  color: #cbd5e1;
+}
+
+.admin-page header a {
+  color: white;
+  font-weight: 800;
+}
+
+.admin-page button,
+.admin-page input,
+.admin-page textarea {
+  font: inherit;
+}
+
+.admin-page section {
+  background: white;
+  border: 0 !important;
+  border-radius: 18px !important;
+  padding: 26px !important;
+  margin-top: 24px !important;
+  box-shadow: 0 10px 35px rgba(15,23,42,.07);
+}
+
+.admin-page form input,
+.admin-page form textarea {
+  width: 100%;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  padding: 13px !important;
+  outline: none;
+}
+
+.admin-page form input:focus,
+.admin-page form textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+}
+
+.admin-page form textarea {
+  resize: vertical;
+}
+
+.admin-page form button,
+.admin-page header button,
+.admin-page article button {
+  border: 0;
+  border-radius: 9px;
+  padding: 11px 16px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.admin-page form button[type="submit"] {
+  background: #2563eb;
+  color: white;
+}
+
+.admin-page header button {
+  background: white;
+  color: #0f172a;
+}
+
+.admin-page article {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px !important;
+  margin-bottom: 12px;
+}
+
+.admin-page article button {
+  background: white;
+  border: 1px solid #cbd5e1;
+  margin-right: 6px;
+}
+
+.admin-page article button:last-child {
+  color: #b91c1c;
+}
+
+@media (max-width: 650px) {
+  .admin-page {
+    padding-top: 14px;
+  }
+
+  .admin-page header {
+    padding: 20px;
+  }
+
+  .admin-page header h1 {
+    font-size: 22px;
+  }
+
+  .admin-page section {
+    padding: 18px !important;
+  }
+}
