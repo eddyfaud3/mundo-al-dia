@@ -81,7 +81,8 @@ export default function AdminPage(){
 
   async function logout(){await fetch("/api/admin/logout",{method:"POST"});location.href="/admin/login";}
 
-  return <main style={{maxWidth:1100,margin:"0 auto",padding:"30px 20px",fontFamily:"Arial,sans-serif"}}>
+  return <main className="admin-page">
+    <div className="admin-container">
     <header style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap"}}>
       <div><h1>🌎 Mundo al Día — Admin</h1><p>Gestiona tus noticias.</p></div>
       <div><a href="/" style={{marginRight:15}}>Ver sitio</a><button onClick={logout}>Cerrar sesión</button></div>
@@ -121,5 +122,6 @@ export default function AdminPage(){
         </article>
       )}
     </section>
+    </div>
   </main>
 }
