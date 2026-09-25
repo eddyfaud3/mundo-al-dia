@@ -9,6 +9,10 @@ export const metadata = {
   },
   description: "Las noticias más importantes del mundo, al día.",
   applicationName: "Mundo al Día",
+  icons: {
+    icon: "/favicon.svg",
+    apple: "/apple-touch-icon.svg"
+  },
   openGraph: {
     type: "website",
     locale: "es_ES",
