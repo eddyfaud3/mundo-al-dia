@@ -25,6 +25,35 @@ async function getNoticia(slug) {
   }
 }
 
+export async function generateMetadata({ params }) {
+  const { noticia } = await getNoticia(params.id);
+
+  if (!noticia) {
+    return {
+      title: "Noticia no encontrada",
+      description: "La noticia que buscas no está disponible."
+    };
+  }
+
+  return {
+    title: noticia.title,
+    description: noticia.excerpt || "Lee las últimas noticias en Mundo al Día.",
+    openGraph: {
+      title: noticia.title,
+      description: noticia.excerpt || "Lee las últimas noticias en Mundo al Día.",
+      type: "article",
+      images: noticia.image_url ? [{ url: noticia.image_url, alt: noticia.title }] : [],
+      publishedTime: noticia.created_at ? new Date(noticia.created_at).toISOString() : undefined
+    },
+    twitter: {
+      card: noticia.image_url ? "summary_large_image" : "summary",
+      title: noticia.title,
+      description: noticia.excerpt || "Lee las últimas noticias en Mundo al Día.",
+      images: noticia.image_url ? [noticia.image_url] : []
+    }
+  };
+}
+
 function getVideoEmbed(url) {
   if (!url) return null;
 
@@ -159,7 +188,7 @@ export default async function NoticiaPage({ params }) {
               <span>Comparte esta noticia y ayuda a crecer a Mundo al Día.</span>
               <a
                 href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
-                  `/noticia/${noticia.slug}`
+                  `https://mundo-al-dia-github-production.up.railway.app/noticia/${noticia.slug}`
                 )}`}
                 target="_blank"
                 rel="noreferrer"
