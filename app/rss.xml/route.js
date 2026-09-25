@@ -1,4 +1,4 @@
-import { getPool, initDb } from "../../../lib/db";
+import { getPool, initDb } from "../../lib/db";
 
 export const dynamic = "force-dynamic";
 
