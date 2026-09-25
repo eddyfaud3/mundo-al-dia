@@ -4,16 +4,19 @@ import { useMemo, useState } from "react";
 
 export default function SearchNews({ noticias }) {
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("Todas");
+
+  const categories = useMemo(() => ["Todas", ...new Set(noticias.map((n) => n.category).filter(Boolean))], [noticias]);
 
   const resultados = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return noticias;
     return noticias.filter((n) =>
+      (category === "Todas" || n.category === category) &&
       [n.title, n.excerpt, n.content, n.category]
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(q))
     );
-  }, [query, noticias]);
+  }, [query, category, noticias]);
 
   return (
     <div className="search-wrap">
@@ -30,7 +33,20 @@ export default function SearchNews({ noticias }) {
         <span>🔎</span>
       </div>
 
-      {query.trim() && (
+      <div className="category-filter" role="group" aria-label="Filtrar por categoría">
+        {categories.map((item) => (
+          <button
+            key={item}
+            type="button"
+            className={category === item ? "active" : ""}
+            onClick={() => setCategory(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+
+      {(query.trim() || category !== "Todas") && (
         <p className="search-count">
           {resultados.length} {resultados.length === 1 ? "resultado" : "resultados"}
         </p>
