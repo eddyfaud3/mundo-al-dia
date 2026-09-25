@@ -1,5 +1,7 @@
 import { v2 as cloudinary } from "cloudinary";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { cookieName, validToken } from "../../../lib/auth";
 
 export const runtime = "nodejs";
 
@@ -21,6 +23,10 @@ function getCloudinaryConfig() {
 
 export async function POST() {
   try {
+    const token = (await cookies()).get(cookieName)?.value;
+    if (!validToken(token)) {
+      return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+    }
     const config = getCloudinaryConfig();
 
     cloudinary.config({
