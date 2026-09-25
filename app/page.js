@@ -1,4 +1,5 @@
 import { getPool, initDb } from "../lib/db";
+import SearchNews from "./components/SearchNews";
 
 export const dynamic = "force-dynamic";
 
@@ -48,19 +49,7 @@ export default async function Home() {
         {noticias.length === 0 ? (
           <p>No hay noticias publicadas todavía.</p>
         ) : (
-          <div className="news-grid">
-            {noticias.map((noticia) => (
-              <article className="card" key={noticia.id}>
-                {noticia.image_url && <img src={noticia.image_url} alt={noticia.title} />}
-                <div className="card-content">
-                  <span>{noticia.category}</span>
-                  <h3>{noticia.title}</h3>
-                  <p>{noticia.excerpt}</p>
-                  <a href={`/noticia/${noticia.slug}`}>Leer noticia →</a>
-                </div>
-              </article>
-            ))}
-          </div>
+          <SearchNews noticias={noticias} />
         )}
       </section>
 
