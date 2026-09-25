@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { cookieName, validToken } from "../../../../lib/auth";
 import { getPool, initDb } from "../../../../lib/db";
+import { publishArticleToFacebook } from "../../../../lib/facebook";
 
 async function auth() {
   const token = cookies().get(cookieName)?.value;
@@ -31,7 +32,25 @@ export async function POST(request) {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [a.title,a.slug,a.excerpt||"",a.content||"",a.image_url||"",a.video_url||"",a.category||"Mundo",!!a.published]
     );
-    return NextResponse.json(rows[0],{status:201});
+
+    const article = rows[0];
+    let facebook = null;
+    if (article.published) {
+      try {
+        facebook = await publishArticleToFacebook(article);
+        if (facebook.published) {
+          await db.query("UPDATE articles SET facebook_post_id=$1,updated_at=NOW() WHERE id=$2", [
+            facebook.postId,
+            article.id,
+          ]);
+          article.facebook_post_id = facebook.postId;
+        }
+      } catch (facebookError) {
+        facebook = { published:false, reason:facebookError.message };
+      }
+    }
+
+    return NextResponse.json({ ...article, facebook }, {status:201});
   } catch(e) {
     return NextResponse.json({error:e.message},{status:400});
   }
