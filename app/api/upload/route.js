@@ -12,19 +12,18 @@ function getCloudinaryConfig() {
     throw new Error("CLOUDINARY_URL no está configurada.");
   }
 
-  // Let Cloudinary parse CLOUDINARY_URL itself. This handles encoded
-  // credentials and Cloudinary URL formats more reliably than URL().
-  cloudinary.config(cloudinaryUrl);
-  const config = cloudinary.config();
+  const match = cloudinaryUrl.match(/^cloudinary:\/\/([^:]+):([^@]+)@(.+)$/);
 
-  if (!config.cloud_name || !config.api_key || !config.api_secret) {
-    throw new Error("CLOUDINARY_URL es inválida o está incompleta.");
+  if (!match) {
+    throw new Error("CLOUDINARY_URL debe tener el formato cloudinary://API_KEY:API_SECRET@CLOUD_NAME.");
   }
 
+  const [, apiKey, apiSecret, cloudName] = match;
+
   return {
-    cloudName: config.cloud_name,
-    apiKey: config.api_key,
-    apiSecret: config.api_secret,
+    cloudName: decodeURIComponent(cloudName),
+    apiKey: decodeURIComponent(apiKey),
+    apiSecret: decodeURIComponent(apiSecret),
   };
 }
 
