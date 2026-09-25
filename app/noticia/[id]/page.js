@@ -1,11 +1,15 @@
+import { getPool, initDb } from "../../../lib/db";
+
 export const dynamic = "force-dynamic";
 
 async function getNoticia(slug) {
   try {
-    const base = process.env.NEXT_PUBLIC_BASE_URL || "";
-    const res = await fetch(`${base}/api/articles/${encodeURIComponent(slug)}`, { cache: "no-store" });
-    if (!res.ok) return null;
-    return await res.json();
+    await initDb();
+    const { rows } = await getPool().query(
+      "SELECT * FROM articles WHERE slug=$1 AND published=true LIMIT 1",
+      [slug]
+    );
+    return rows[0] || null;
   } catch {
     return null;
   }
