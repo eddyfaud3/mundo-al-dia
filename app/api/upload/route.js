@@ -6,24 +6,35 @@ import { cookieName, validToken } from "../../../lib/auth";
 export const runtime = "nodejs";
 
 function getCloudinaryConfig() {
-  const cloudinaryUrl = process.env.CLOUDINARY_URL?.trim();
+  let cloudinaryUrl = process.env.CLOUDINARY_URL?.trim();
 
   if (!cloudinaryUrl) {
     throw new Error("CLOUDINARY_URL no está configurada.");
   }
 
-  const match = cloudinaryUrl.match(/^cloudinary:\/\/([^:]+):([^@]+)@(.+)$/);
+  // Accept a normal Cloudinary URL and tolerate accidental wrapping quotes.
+  cloudinaryUrl = cloudinaryUrl.replace(/^['"]|['"]$/g, "").trim();
 
-  if (!match) {
+  let parsed;
+  try {
+    parsed = new URL(cloudinaryUrl);
+  } catch {
     throw new Error("CLOUDINARY_URL debe tener el formato cloudinary://API_KEY:API_SECRET@CLOUD_NAME.");
   }
 
-  const [, apiKey, apiSecret, cloudName] = match;
+  if (
+    parsed.protocol !== "cloudinary:" ||
+    !parsed.username ||
+    !parsed.password ||
+    !parsed.hostname
+  ) {
+    throw new Error("CLOUDINARY_URL debe tener el formato cloudinary://API_KEY:API_SECRET@CLOUD_NAME.");
+  }
 
   return {
-    cloudName: decodeURIComponent(cloudName),
-    apiKey: decodeURIComponent(apiKey),
-    apiSecret: decodeURIComponent(apiSecret),
+    cloudName: parsed.hostname,
+    apiKey: decodeURIComponent(parsed.username),
+    apiSecret: decodeURIComponent(parsed.password),
   };
 }
 
