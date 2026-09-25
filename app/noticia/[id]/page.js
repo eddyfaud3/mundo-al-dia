@@ -1,23 +1,18 @@
-const noticias = {
-  "1": {
-    categoria: "Mundo",
-    titulo: "Las noticias más importantes del mundo",
-    texto: "Mundo al Día te mantiene informado sobre los acontecimientos más importantes de todo el mundo."
-  },
-  "2": {
-    categoria: "Internacional",
-    titulo: "Últimas noticias y acontecimientos internacionales",
-    texto: "Conoce los acontecimientos internacionales que están marcando la actualidad."
-  },
-  "3": {
-    categoria: "Actualidad",
-    titulo: "Información que importa",
-    texto: "Noticias, imágenes y videos para mantenerte informado."
-  }
-};
+export const dynamic = "force-dynamic";
 
-export default function NoticiaPage({ params }) {
-  const noticia = noticias[params.id];
+async function getNoticia(slug) {
+  try {
+    const base = process.env.NEXT_PUBLIC_BASE_URL || "";
+    const res = await fetch(`${base}/api/articles/${encodeURIComponent(slug)}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export default async function NoticiaPage({ params }) {
+  const noticia = await getNoticia(params.id);
 
   if (!noticia) {
     return (
@@ -38,15 +33,18 @@ export default function NoticiaPage({ params }) {
       </header>
 
       <article className="container news-section">
-        <span>{noticia.categoria}</span>
-        <h1>{noticia.titulo}</h1>
-        <p>{noticia.texto}</p>
+        <span>{noticia.category}</span>
+        <h1>{noticia.title}</h1>
+        {noticia.image_url && <img src={noticia.image_url} alt={noticia.title} style={{ width: "100%", maxWidth: 1200, borderRadius: 12, margin: "20px 0" }} />}
+        {noticia.video_url && (
+          <p><a href={noticia.video_url} target="_blank" rel="noreferrer">▶ Ver video</a></p>
+        )}
+        {noticia.excerpt && <p><strong>{noticia.excerpt}</strong></p>}
+        <div style={{ whiteSpace: "pre-wrap" }}>{noticia.content}</div>
 
         <div className="cta">
           <h2>Sigue informado</h2>
-          <p>
-            Comparte Mundo al Día y síguenos para recibir las noticias más importantes.
-          </p>
+          <p>Comparte Mundo al Día y síguenos para recibir las noticias más importantes.</p>
         </div>
       </article>
     </main>
