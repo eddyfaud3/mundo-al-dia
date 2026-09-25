@@ -1,11 +1,14 @@
+import { getPool, initDb } from "../lib/db";
+
 export const dynamic = "force-dynamic";
 
 async function getNoticias() {
   try {
-    const base = process.env.NEXT_PUBLIC_BASE_URL || "";
-    const res = await fetch(`${base}/api/articles`, { cache: "no-store" });
-    if (!res.ok) return [];
-    return await res.json();
+    await initDb();
+    const { rows } = await getPool().query(
+      "SELECT * FROM articles WHERE published=true ORDER BY created_at DESC"
+    );
+    return rows;
   } catch {
     return [];
   }
