@@ -5,13 +5,23 @@ export const dynamic = "force-dynamic";
 async function getNoticia(slug) {
   try {
     await initDb();
-    const { rows } = await getPool().query(
+    const pool = getPool();
+    const { rows } = await pool.query(
       "SELECT * FROM articles WHERE slug=$1 AND published=true LIMIT 1",
       [slug]
     );
-    return rows[0] || null;
+    const noticia = rows[0] || null;
+
+    if (!noticia) return { noticia: null, relacionadas: [] };
+
+    const related = await pool.query(
+      "SELECT * FROM articles WHERE published=true AND id<>$1 AND category=$2 ORDER BY created_at DESC LIMIT 3",
+      [noticia.id, noticia.category]
+    );
+
+    return { noticia, relacionadas: related.rows };
   } catch {
-    return null;
+    return { noticia: null, relacionadas: [] };
   }
 }
 
@@ -50,7 +60,7 @@ function formatDate(value) {
 }
 
 export default async function NoticiaPage({ params }) {
-  const noticia = await getNoticia(params.id);
+  const { noticia, relacionadas } = await getNoticia(params.id);
 
   if (!noticia) {
     return (
@@ -160,6 +170,30 @@ export default async function NoticiaPage({ params }) {
           </div>
         </div>
       </article>
+
+      {relacionadas.length > 0 && (
+        <section className="related-news">
+          <div className="container">
+            <div className="related-heading">
+              <span>Más noticias</span>
+              <h2>También te puede interesar</h2>
+            </div>
+            <div className="news-grid">
+              {relacionadas.map((item) => (
+                <article className="card" key={item.id}>
+                  {item.image_url && <img src={item.image_url} alt={item.title} />}
+                  <div className="card-content">
+                    <span>{item.category || "Mundo"}</span>
+                    <h3>{item.title}</h3>
+                    <p>{item.excerpt}</p>
+                    <a href={`/noticia/${item.slug}`}>Leer noticia →</a>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="cta">
         <h2>Sigue informado</h2>
