@@ -6,35 +6,39 @@ import { cookieName, validToken } from "../../../lib/auth";
 export const runtime = "nodejs";
 
 function getCloudinaryConfig() {
-  let cloudinaryUrl = process.env.CLOUDINARY_URL?.trim();
+  let value = process.env.CLOUDINARY_URL?.trim();
 
-  if (!cloudinaryUrl) {
+  if (!value) {
     throw new Error("CLOUDINARY_URL no está configurada.");
   }
 
-  // Accept a normal Cloudinary URL and tolerate accidental wrapping quotes.
-  cloudinaryUrl = cloudinaryUrl.replace(/^['"]|['"]$/g, "").trim();
+  value = value.replace(/^['"]|['"]$/g, "").trim();
 
-  let parsed;
-  try {
-    parsed = new URL(cloudinaryUrl);
-  } catch {
+  const prefix = "cloudinary://";
+  if (!value.toLowerCase().startsWith(prefix)) {
     throw new Error("CLOUDINARY_URL debe tener el formato cloudinary://API_KEY:API_SECRET@CLOUD_NAME.");
   }
 
-  if (
-    parsed.protocol !== "cloudinary:" ||
-    !parsed.username ||
-    !parsed.password ||
-    !parsed.hostname
-  ) {
+  const credentials = value.slice(prefix.length);
+  const at = credentials.lastIndexOf("@");
+  const colon = credentials.indexOf(":");
+
+  if (colon <= 0 || at <= colon + 1 || at === credentials.length - 1) {
+    throw new Error("CLOUDINARY_URL debe tener el formato cloudinary://API_KEY:API_SECRET@CLOUD_NAME.");
+  }
+
+  const apiKey = credentials.slice(0, colon);
+  const apiSecret = credentials.slice(colon + 1, at);
+  const cloudName = credentials.slice(at + 1).split("/")[0];
+
+  if (!apiKey || !apiSecret || !cloudName) {
     throw new Error("CLOUDINARY_URL debe tener el formato cloudinary://API_KEY:API_SECRET@CLOUD_NAME.");
   }
 
   return {
-    cloudName: parsed.hostname,
-    apiKey: decodeURIComponent(parsed.username),
-    apiSecret: decodeURIComponent(parsed.password),
+    cloudName: decodeURIComponent(cloudName),
+    apiKey: decodeURIComponent(apiKey),
+    apiSecret: decodeURIComponent(apiSecret),
   };
 }
 
