@@ -6,30 +6,36 @@ import { cookieName, validToken } from "../../../lib/auth";
 export const runtime = "nodejs";
 
 function getCloudinaryConfig() {
-  const value = process.env.CLOUDINARY_URL?.trim();
+  let value = process.env.CLOUDINARY_URL?.trim();
 
   if (!value) {
     throw new Error("CLOUDINARY_URL no está configurada.");
   }
 
-  // Let Cloudinary's official SDK parse the connection URL.
-  try {
-    cloudinary.config(value);
-  } catch {
-    throw new Error("No se pudo interpretar CLOUDINARY_URL con Cloudinary.");
+  // Accept common ways the value may have been pasted into Railway.
+  value = value.replace(/^CLOUDINARY_URL\s*=\s*/i, "").trim();
+  value = value.replace(/^['"]|['"]$/g, "").trim();
+
+  if (value.toLowerCase().startsWith("cloudinary://")) {
+    value = value.slice("cloudinary://".length);
   }
 
-  const config = cloudinary.config();
+  const at = value.lastIndexOf("@");
+  const colon = value.indexOf(":");
 
-  if (!config.cloud_name || !config.api_key || !config.api_secret) {
+  if (colon <= 0 || at <= colon + 1 || at === value.length - 1) {
+    throw new Error("CLOUDINARY_URL no tiene las credenciales completas.");
+  }
+
+  const apiKey = value.slice(0, colon).trim();
+  const apiSecret = value.slice(colon + 1, at).trim();
+  const cloudName = value.slice(at + 1).trim().replace(/\/$/, "");
+
+  if (!apiKey || !apiSecret || !cloudName) {
     throw new Error("Cloudinary no pudo obtener las credenciales desde CLOUDINARY_URL.");
   }
 
-  return {
-    cloudName: config.cloud_name,
-    apiKey: config.api_key,
-    apiSecret: config.api_secret,
-  };
+  return { cloudName, apiKey, apiSecret };
 }
 
 export async function POST() {
@@ -38,6 +44,7 @@ export async function POST() {
     if (!validToken(token)) {
       return NextResponse.json({ error: "No autorizado." }, { status: 401 });
     }
+
     const config = getCloudinaryConfig();
 
     cloudinary.config({
@@ -50,10 +57,7 @@ export async function POST() {
     const folder = "mundo-al-dia";
 
     const signature = cloudinary.utils.api_sign_request(
-      {
-        timestamp,
-        folder,
-      },
+      { timestamp, folder },
       config.apiSecret
     );
 
@@ -66,13 +70,8 @@ export async function POST() {
     });
   } catch (error) {
     console.error("Error Cloudinary:", error);
-
     return NextResponse.json(
-      {
-        error:
-          error.message ||
-          "No se pudo generar la firma de subida",
-      },
+      { error: error.message || "No se pudo generar la firma de subida" },
       { status: 500 }
     );
   }
