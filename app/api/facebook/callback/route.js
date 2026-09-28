@@ -12,8 +12,13 @@ export async function GET(request) {
   const redirect = (message) =>
     NextResponse.redirect(new URL("/admin?facebook=" + encodeURIComponent(message), site));
 
+  if (url.searchParams.get("error")) {
+    const detail = url.searchParams.get("error_description") || url.searchParams.get("error");
+    return redirect("error:" + detail);
+  }
+
   if (!code || !state || !expectedState || state !== expectedState) {
-    return redirect("error");
+    return redirect("error:La sesión de conexión de Facebook expiró o no coincide. Intenta conectar de nuevo.");
   }
 
   try {
@@ -24,6 +29,6 @@ export async function GET(request) {
     response.cookies.delete("mundo_fb_oauth_state");
     return response;
   } catch (error) {
-    return redirect("error:" + error.message);
+    return redirect("error:" + (error?.message || "Facebook rechazó la conexión."));
   }
 }
