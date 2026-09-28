@@ -4,6 +4,13 @@ import crypto from "crypto";
 import { cookieName, validToken } from "../../../../lib/auth";
 import { facebookConfigured, facebookLoginUrl } from "../../../../lib/facebook";
 
+function createOAuthState() {
+  const nonce = crypto.randomBytes(24).toString("hex");
+  const secret = process.env.META_APP_SECRET || process.env.ADMIN_PASSWORD || "";
+  const signature = crypto.createHmac("sha256", secret).update(nonce).digest("hex");
+  return `${nonce}.${signature}`;
+}
+
 export async function GET() {
   if (!validToken(cookies().get(cookieName)?.value)) {
     return NextResponse.redirect(new URL("/admin/login", process.env.NEXT_PUBLIC_SITE_URL || "https://mundo-al-dia-github-production.up.railway.app"));
@@ -15,14 +22,6 @@ export async function GET() {
     );
   }
 
-  const state = crypto.randomBytes(24).toString("hex");
-  const response = NextResponse.redirect(facebookLoginUrl(state));
-  response.cookies.set("mundo_fb_oauth_state", state, {
-    httpOnly:true,
-    secure:true,
-    sameSite:"lax",
-    maxAge:600,
-    path:"/",
-  });
-  return response;
+  const state = createOAuthState();
+  return NextResponse.redirect(facebookLoginUrl(state));
 }
