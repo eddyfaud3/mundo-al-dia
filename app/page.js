@@ -27,6 +27,7 @@ export default async function Home() {
             <a href="/">Inicio</a>
             <a href="#ultimas">Últimas noticias</a>
             <a href="#contacto">Contacto</a>
+            <a href="/admin" className="admin-link">🔐 Admin</a>
           </nav>
         </div>
       </header>
