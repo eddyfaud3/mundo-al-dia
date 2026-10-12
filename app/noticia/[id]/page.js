@@ -1,4 +1,5 @@
 import { getPool, initDb } from "../../../lib/db";
+import ArticleEngagement from "../../../components/ArticleEngagement";
 
 export const dynamic = "force-dynamic";
 
@@ -206,19 +207,7 @@ export default async function NoticiaPage({ params }) {
                 ))}
             </div>
 
-            <div className="article-share">
-              <strong>¿Te pareció importante?</strong>
-              <span>Comparte esta noticia y ayuda a crecer a Mundo al Día.</span>
-              <a
-                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
-                  `https://mundo-al-dia-github-production.up.railway.app/noticia/${noticia.slug}`
-                )}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Compartir en Facebook →
-              </a>
-            </div>
+            <ArticleEngagement slug={noticia.slug} title={noticia.title} />
           </div>
         </div>
       </article>
