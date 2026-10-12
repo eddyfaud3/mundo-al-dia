@@ -64,6 +64,7 @@ export default function ArticleEngagement({ slug, title }) {
   }
 
   const encodedUrl = encodeURIComponent(pageUrl);
+  const encodedTitle = encodeURIComponent(title || "Mundo al Día");
   const whatsappMessage = encodeURIComponent(`${title || "Mundo al Día"}\n${pageUrl}`);
 
   return (
@@ -76,7 +77,7 @@ export default function ArticleEngagement({ slug, title }) {
         <button type="button" onClick={handleLike} disabled={liked} className={liked ? "engagement-like is-liked" : "engagement-like"}>
           {liked ? "👍 Te gusta" : "👍 Me gusta"}
         </button>
-        <a href={pageUrl ? `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}` : "#"} target="_blank" rel="noreferrer" className="engagement-share">
+        <a href={pageUrl ? `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedTitle}` : "#"} target="_blank" rel="noreferrer" className="engagement-share">
           Compartir en Facebook
         </a>
         <a href={pageUrl ? `https://wa.me/?text=${whatsappMessage}` : "#"} target="_blank" rel="noreferrer" className="engagement-share">
