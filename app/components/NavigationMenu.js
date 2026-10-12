@@ -19,9 +19,6 @@ export default function NavigationMenu() {
         <a href="#contacto" onClick={closeMenu}>Contacto</a>
       </div>
       <div className="navigation-actions">
-        <a href="/admin" className="admin-link admin-action" aria-label="Abrir administración">
-          <span aria-hidden="true">🔐</span><span>Admin</span>
-        </a>
         <button
           className="mobile-menu-toggle"
           type="button"
