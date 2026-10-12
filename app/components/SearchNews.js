@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-export default function SearchNews({ noticias }) {
+export default function SearchNews({ noticias, featuredId }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Todas");
 
@@ -10,13 +10,15 @@ export default function SearchNews({ noticias }) {
 
   const resultados = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return noticias.filter((n) =>
-      (category === "Todas" || n.category === category) &&
-      [n.title, n.excerpt, n.content, n.category]
+    return noticias.filter((n) => {
+      const matchesCategory = category === "Todas" || n.category === category;
+      const matchesQuery = [n.title, n.excerpt, n.content, n.category]
         .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(q))
-    );
-  }, [query, category, noticias]);
+        .some((value) => value.toLowerCase().includes(q));
+      const shouldHideFeatured = Boolean(featuredId) && n.id === featuredId && !q && category === "Todas";
+      return matchesCategory && matchesQuery && !shouldHideFeatured;
+    });
+  }, [query, category, noticias, featuredId]);
 
   return (
     <div className="search-wrap">
@@ -30,7 +32,7 @@ export default function SearchNews({ noticias }) {
           placeholder="Busca por título, tema o categoría..."
           aria-label="Buscar noticias"
         />
-        <span>🔎</span>
+        <span aria-hidden="true">🔎</span>
       </div>
 
       <div className="category-filter" role="group" aria-label="Filtrar por categoría">
