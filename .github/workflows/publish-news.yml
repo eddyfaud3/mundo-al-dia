@@ -1,0 +1,62 @@
+name: Publicar noticia aprobada en Mundo al Día
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  issues: read
+  contents: read
+
+jobs:
+  publish:
+    if: github.event.label.name == 'publish-news'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validar y publicar noticia
+        uses: actions/github-script@v7
+        env:
+          SITE_URL: ${{ secrets.MUNDO_AL_DIA_SITE_URL }}
+          AUTOMATION_SECRET: ${{ secrets.MUNDO_AL_DIA_AUTOMATION_SECRET }}
+        with:
+          script: |
+            const issue = context.payload.issue;
+            if (!process.env.SITE_URL || !process.env.AUTOMATION_SECRET) {
+              core.setFailed("Faltan los secretos MUNDO_AL_DIA_SITE_URL o MUNDO_AL_DIA_AUTOMATION_SECRET en GitHub Actions.");
+              return;
+            }
+
+            let article;
+            try {
+              article = JSON.parse(issue.body || "");
+            } catch {
+              core.setFailed("El cuerpo del issue debe ser un objeto JSON válido con title, slug, excerpt, content, category y, opcionalmente, image_url y video_url.");
+              return;
+            }
+
+            if (!article || typeof article !== "object" || Array.isArray(article)) {
+              core.setFailed("El contenido debe ser un objeto JSON.");
+              return;
+            }
+
+            const response = await fetch(new URL("/api/automation/publish", process.env.SITE_URL), {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${process.env.AUTOMATION_SECRET}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(article),
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              core.setFailed(`La publicación falló (HTTP ${response.status}): ${result.error || "error desconocido"}`);
+              return;
+            }
+
+            core.info(`Publicado en el sitio: ${result.url}`);
+            if (result.facebook?.published) {
+              core.info("También se publicó en Facebook.");
+            } else {
+              core.warning(`La noticia está en el sitio, pero Facebook no confirmó la publicación: ${result.facebook?.reason || "sin detalles"}`);
+            }
