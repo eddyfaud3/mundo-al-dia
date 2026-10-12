@@ -18,8 +18,10 @@ export default function ArticleEngagement({ slug, title }) {
   const [likes, setLikes] = useState(0);
   const [liked, setLiked] = useState(false);
   const [ready, setReady] = useState(false);
+  const [pageUrl, setPageUrl] = useState("");
 
   useEffect(() => {
+    setPageUrl(window.location.href);
     let active = true;
     const likedKey = "mundo-al-dia-liked-" + slug;
     setLiked(localStorage.getItem(likedKey) === "yes");
@@ -61,9 +63,8 @@ export default function ArticleEngagement({ slug, title }) {
     }
   }
 
-  const pageUrl = typeof window !== "undefined" ? window.location.href : "";
   const encodedUrl = encodeURIComponent(pageUrl);
-  const encodedTitle = encodeURIComponent(title || "Mundo al Día");
+  const whatsappMessage = encodeURIComponent(`${title || "Mundo al Día"}\n${pageUrl}`);
 
   return (
     <section className="article-engagement" aria-label="Interacciones de la noticia">
@@ -75,10 +76,10 @@ export default function ArticleEngagement({ slug, title }) {
         <button type="button" onClick={handleLike} disabled={liked} className={liked ? "engagement-like is-liked" : "engagement-like"}>
           {liked ? "👍 Te gusta" : "👍 Me gusta"}
         </button>
-        <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`} target="_blank" rel="noreferrer" className="engagement-share">
+        <a href={pageUrl ? `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}` : "#"} target="_blank" rel="noreferrer" className="engagement-share">
           Compartir en Facebook
         </a>
-        <a href={`https://api.whatsapp.com/send?text=${encodedTitle}%20${encodedUrl}`} target="_blank" rel="noreferrer" className="engagement-share">
+        <a href={pageUrl ? `https://wa.me/?text=${whatsappMessage}` : "#"} target="_blank" rel="noreferrer" className="engagement-share">
           Compartir por WhatsApp
         </a>
       </div>
