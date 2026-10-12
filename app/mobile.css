@@ -196,3 +196,99 @@
     overflow-wrap: anywhere;
   }
 }
+
+
+/* Menú desplegable para móviles y acceso rápido a Inicio */
+.site-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.navigation-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.home-navigation-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.home-navigation-link > span:first-child {
+  font-size: 20px;
+  line-height: 1;
+}
+.mobile-menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.menu-toggle-icon {
+  font-size: 23px;
+  line-height: 1;
+}
+@media (max-width: 600px) {
+  .header .nav {
+    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .site-navigation {
+    position: relative;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .mobile-menu-toggle {
+    display: inline-flex;
+    align-self: flex-end;
+  }
+  .navigation-links {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 6px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
+    box-sizing: border-box;
+  }
+  .navigation-links.is-open {
+    display: flex;
+  }
+  .navigation-links a {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 2px;
+    box-sizing: border-box;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 15px !important;
+  }
+  .navigation-links a:last-child {
+    border-bottom: 0;
+  }
+  .home-navigation-link > span:first-child {
+    font-size: 22px;
+  }
+}
