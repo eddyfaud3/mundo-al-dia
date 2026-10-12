@@ -46,7 +46,9 @@ export default async function Home() {
         <section className="container featured-section" aria-labelledby="featured-title">
           <div className="featured-heading">
             <span className="featured-label">NOTICIA DESTACADA</span>
-            <span className="featured-category">{destacada.category || "Mundo"}</span>
+            {destacada.category && destacada.category.trim().toLowerCase() !== (destacada.title || "").trim().toLowerCase() && (
+              <span className="featured-category">{destacada.category}</span>
+            )}
           </div>
           <a className="featured-card" href={`/noticia/${destacada.slug}`}>
             {destacada.image_url ? (
