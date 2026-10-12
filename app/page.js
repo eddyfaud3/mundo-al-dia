@@ -1,5 +1,6 @@
 import { getPool, initDb } from "../lib/db";
 import SearchNews from "./components/SearchNews";
+import NavigationMenu from "./components/NavigationMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +25,7 @@ export default async function Home() {
       <header className="header">
         <div className="container nav">
           <a href="/" className="logo" aria-label="Mundo al Día, inicio">🌎 Mundo al Día</a>
-          <nav aria-label="Navegación principal">
-            <a href="/">Inicio</a>
-            <a href="#ultimas">Últimas noticias</a>
-            <a href="#contacto">Contacto</a>
-            <a href="/admin" className="admin-link">🔐 Admin</a>
-          </nav>
+          <NavigationMenu />
         </div>
       </header>
 
