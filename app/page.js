@@ -17,13 +17,14 @@ async function getNoticias() {
 
 export default async function Home() {
   const noticias = await getNoticias();
+  const destacada = noticias[0] || null;
 
   return (
     <main>
       <header className="header">
         <div className="container nav">
-          <div className="logo">🌎 Mundo al Día</div>
-          <nav>
+          <a href="/" className="logo" aria-label="Mundo al Día, inicio">🌎 Mundo al Día</a>
+          <nav aria-label="Navegación principal">
             <a href="/">Inicio</a>
             <a href="#ultimas">Últimas noticias</a>
             <a href="#contacto">Contacto</a>
@@ -41,6 +42,27 @@ export default async function Home() {
         </div>
       </section>
 
+      {destacada && (
+        <section className="container featured-section" aria-labelledby="featured-title">
+          <div className="featured-heading">
+            <span className="featured-label">NOTICIA DESTACADA</span>
+            <span className="featured-category">{destacada.category || "Mundo"}</span>
+          </div>
+          <a className="featured-card" href={`/noticia/${destacada.slug}`}>
+            {destacada.image_url ? (
+              <img className="featured-image" src={destacada.image_url} alt={destacada.title} />
+            ) : (
+              <div className="featured-image featured-image-placeholder" aria-hidden="true">🌎</div>
+            )}
+            <div className="featured-content">
+              <h2 id="featured-title">{destacada.title}</h2>
+              {destacada.excerpt && <p>{destacada.excerpt}</p>}
+              <span className="featured-read">Leer noticia completa →</span>
+            </div>
+          </a>
+        </section>
+      )}
+
       <section id="ultimas" className="container news-section">
         <div className="section-title">
           <h2>Últimas noticias</h2>
@@ -50,7 +72,7 @@ export default async function Home() {
         {noticias.length === 0 ? (
           <p>No hay noticias publicadas todavía.</p>
         ) : (
-          <SearchNews noticias={noticias} />
+          <SearchNews noticias={noticias} featuredId={destacada?.id} />
         )}
       </section>
 
