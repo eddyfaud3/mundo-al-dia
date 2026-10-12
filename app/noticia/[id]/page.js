@@ -1,5 +1,6 @@
 import { getPool, initDb } from "../../../lib/db";
 import ArticleEngagement from "../../../components/ArticleEngagement";
+import ArticleComments from "../../../components/ArticleComments";
 
 export const dynamic = "force-dynamic";
 
@@ -208,6 +209,7 @@ export default async function NoticiaPage({ params }) {
             </div>
 
             <ArticleEngagement slug={noticia.slug} title={noticia.title} />
+            <ArticleComments slug={noticia.slug} />
           </div>
         </div>
       </article>
