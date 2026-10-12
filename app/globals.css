@@ -1,5 +1,3 @@
-[object Object]
-
 /* Filtros de noticias */
 .category-filter {
   display: flex;
@@ -49,3 +47,30 @@
 .button { display: inline-block; margin-top: 14px; padding: 13px 18px; border-radius: 10px; background: #2563eb; color: white; font-weight: 800; }
 .loading-spinner { width: 38px; height: 38px; border: 4px solid #dbeafe; border-top-color: #2563eb; border-radius: 50%; margin: 0 auto 18px; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Imagen principal de las noticias: tamaño adaptable sin agrandar la imagen original */
+.article-hero {
+  width: min(100%, 900px);
+  margin: 24px auto 32px;
+}
+
+.article-hero img {
+  display: block;
+  width: 100%;
+  max-height: 520px;
+  height: auto;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+@media (max-width: 768px) {
+  .article-hero {
+    width: 100%;
+    margin: 18px auto 24px;
+  }
+
+  .article-hero img {
+    max-height: 320px;
+    border-radius: 8px;
+  }
+}
