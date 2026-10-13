@@ -85,6 +85,7 @@ export default async function Home() {
         <div className="container">
           <strong>🌎 Mundo al Día</strong>
           <p>Noticias globales, al día.</p>
+          <p>Contacto: <a href="mailto:mundoaldia238@gmail.com">mundoaldia238@gmail.com</a></p>
         </div>
       </footer>
     </main>
