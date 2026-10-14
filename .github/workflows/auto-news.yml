@@ -77,29 +77,41 @@ jobs:
             async function findArticleImage(url) {
               try {
                 const response = await fetch(url, {
-                  headers: { "User-Agent": "Mozilla/5.0 (compatible; MundoAlDiaNewsBot/1.0)" },
-                  signal: AbortSignal.timeout(8000)
+                  headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36" },
+                  redirect: "follow",
+                  signal: AbortSignal.timeout(10000)
                 });
                 if (!response.ok) return "";
-                const html = (await response.text()).slice(0, 1500000);
-                const metas = html.match(/<meta\b[^>]*>/gi) || [];
+                const html = (await response.text()).slice(0, 2000000);
+                const baseUrl = response.url || url;
+                const candidates = [];
+                const metas = html.match(/<meta\\b[^>]*>/gi) || [];
                 for (const meta of metas) {
-                  const property = meta.match(/(?:property|name)\s*=\s*["'](og:image|twitter:image|twitter:image:src)["']/i)?.[1];
-                  if (!property) continue;
-                  const raw = meta.match(/content\s*=\s*["']([^"']+)["']/i)?.[1];
-                  if (!raw) continue;
-                  const candidate = raw.replace(/&amp;/g, "&").trim();
-                  const image = new URL(candidate, response.url);
-                  const host = image.hostname.toLowerCase();
-                  const path = image.pathname.toLowerCase();
-                  const isGoogleAsset =
-                    host === "google.com" || host.endsWith(".google.com") ||
-                    host === "googleusercontent.com" || host.endsWith(".googleusercontent.com") ||
-                    host === "gstatic.com" || host.endsWith(".gstatic.com") ||
-                    host === "googleapis.com" || host.endsWith(".googleapis.com");
-                  const looksLikeLogo =
-                    /(?:^|[\/_-])(logo|favicon|icon|avatar|sprite|placeholder)(?:[\/_\-.]|$)/i.test(path);
-                  if (image.protocol === "https:" && !isGoogleAsset && !looksLikeLogo) return image.href;
+                  const key = meta.match(/(?:property|name)\\s*=\\s*["'](og:image|og:image:url|twitter:image|twitter:image:src)["']/i)?.[1];
+                  if (!key) continue;
+                  const raw = meta.match(/content\\s*=\\s*["']([^"']+)["']/i)?.[1];
+                  if (raw) candidates.push(raw);
+                }
+                const images = html.match(/<img\\b[^>]*>/gi) || [];
+                for (const tag of images.slice(0, 80)) {
+                  const raw = tag.match(/(?:src|data-src|data-original)\\s*=\\s*["']([^"']+)["']/i)?.[1];
+                  const alt = tag.match(/alt\\s*=\\s*["']([^"']*)["']/i)?.[1] || "";
+                  if (raw && !/(logo|favicon|avatar|sprite|placeholder|icon)/i.test(alt + " " + raw)) candidates.push(raw);
+                }
+                for (const raw of candidates) {
+                  try {
+                    const image = new URL(raw.replace(/&amp;/g, "&").trim(), baseUrl);
+                    const host = image.hostname.toLowerCase();
+                    const path = image.pathname.toLowerCase();
+                    const isGoogleAsset =
+                      host === "google.com" || host.endsWith(".google.com") ||
+                      host === "googleusercontent.com" || host.endsWith(".googleusercontent.com") ||
+                      host === "gstatic.com" || host.endsWith(".gstatic.com") ||
+                      host === "googleapis.com" || host.endsWith(".googleapis.com");
+                    const looksGeneric = /(?:^|[\\/_-])(logo|favicon|icon|avatar|sprite|placeholder|default)(?:[\\/_\\-.]|$)/i.test(path);
+                    const imageFile = /\\.(jpe?g|png|webp)(?:$|[?#])/i.test(image.href);
+                    if (image.protocol === "https:" && !isGoogleAsset && !looksGeneric && (imageFile || /image|photo|media|upload|content|article/i.test(path))) return image.href;
+                  } catch {}
                 }
               } catch (error) {
                 core.info("No se pudo obtener la imagen de la fuente: " + (error?.message || "error de lectura"));
@@ -121,8 +133,11 @@ jobs:
                 item.link
               ].join("\n");
               const imageUrl = await findArticleImage(item.link);
-              if (imageUrl) core.info("Se encontró una imagen de la fuente para la noticia.");
-              else core.warning("La fuente no ofrece una imagen pública; la noticia se publicará sin foto.");
+              if (!imageUrl) {
+                core.warning("Se omite esta noticia porque no se pudo encontrar una imagen pública; se probará otra noticia.");
+                continue;
+              }
+              core.info("Se encontró una imagen pública de la fuente.");
 
               const article = {
                 title: item.title,
