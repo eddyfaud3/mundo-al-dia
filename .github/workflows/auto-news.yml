@@ -90,7 +90,16 @@ jobs:
                   if (!raw) continue;
                   const candidate = raw.replace(/&amp;/g, "&").trim();
                   const image = new URL(candidate, response.url);
-                  if (image.protocol === "https:" && !image.hostname.endsWith("google.com")) return image.href;
+                  const host = image.hostname.toLowerCase();
+                  const path = image.pathname.toLowerCase();
+                  const isGoogleAsset =
+                    host === "google.com" || host.endsWith(".google.com") ||
+                    host === "googleusercontent.com" || host.endsWith(".googleusercontent.com") ||
+                    host === "gstatic.com" || host.endsWith(".gstatic.com") ||
+                    host === "googleapis.com" || host.endsWith(".googleapis.com");
+                  const looksLikeLogo =
+                    /(?:^|[\/_-])(logo|favicon|icon|avatar|sprite|placeholder)(?:[\/_\-.]|$)/i.test(path);
+                  if (image.protocol === "https:" && !isGoogleAsset && !looksLikeLogo) return image.href;
                 }
               } catch (error) {
                 core.info("No se pudo obtener la imagen de la fuente: " + (error?.message || "error de lectura"));
