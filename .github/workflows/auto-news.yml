@@ -90,16 +90,17 @@ jobs:
                   const key = meta.match(/(?:property|name)\s*=\s*["'](og:image|og:image:url|twitter:image|twitter:image:src)["']/i)?.[1];
                   if (!key) continue;
                   const raw = meta.match(/content\s*=\s*["']([^"']+)["']/i)?.[1];
-                  if (raw) candidates.push(raw);
+                  if (raw) candidates.push({ raw, meta: true });
                 }
                 const images = html.match(/<img\b[^>]*>/gi) || [];
                 for (const tag of images.slice(0, 80)) {
                   const raw = tag.match(/(?:src|data-src|data-original)\s*=\s*["']([^"']+)["']/i)?.[1];
                   const alt = tag.match(/alt\s*=\s*["']([^"']*)["']/i)?.[1] || "";
-                  if (raw && !/(logo|favicon|avatar|sprite|placeholder|icon)/i.test(alt + " " + raw)) candidates.push(raw);
+                  if (raw && !/(logo|favicon|avatar|sprite|placeholder|icon)/i.test(alt + " " + raw)) candidates.push({ raw, meta: false });
                 }
-                for (const raw of candidates) {
+                for (const candidate of candidates) {
                   try {
+                    const raw = candidate.raw;
                     const image = new URL(raw.replace(/&amp;/g, "&").trim(), baseUrl);
                     const host = image.hostname.toLowerCase();
                     const path = image.pathname.toLowerCase();
@@ -110,7 +111,7 @@ jobs:
                       host === "googleapis.com" || host.endsWith(".googleapis.com");
                     const looksGeneric = ["logo","favicon","icon","avatar","sprite","placeholder","default"].some(term => path.includes(term));
                     const imageFile = /\.(jpe?g|png|webp)(?:$|[?#])/i.test(image.href);
-                    if (image.protocol === "https:" && !isGoogleAsset && !looksGeneric && (imageFile || /image|photo|media|upload|content|article/i.test(path))) return image.href;
+                    if (image.protocol === "https:" && !isGoogleAsset && !looksGeneric && (candidate.meta || imageFile || /image|photo|media|upload|content|article/i.test(path))) return image.href;
                   } catch {}
                 }
               } catch (error) {
@@ -133,11 +134,11 @@ jobs:
                 item.link
               ].join("\n");
               const imageUrl = await findArticleImage(item.link);
-              if (imageUrl) {
-                core.info("Se encontró una imagen pública de la fuente.");
-              } else {
-                core.warning("No se encontró una imagen pública para esta noticia; se publicará el texto para no detener toda la automatización.");
+              if (!imageUrl) {
+                core.warning("No se encontró una imagen pública verificable para esta noticia; se omite para evitar publicar artículos sin foto.");
+                continue;
               }
+              core.info("Se encontró una imagen pública de la fuente: " + imageUrl);
 
               const article = {
                 title: item.title,
