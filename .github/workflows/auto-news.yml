@@ -34,9 +34,12 @@ jobs:
 
             // Usar feeds RSS directos de medios en español; los enlaces de Google News
             // pueden quedarse en news.google.com y no permiten extraer la foto original.
-            // DW Español ofrece un feed directo con enlaces del medio; evitamos agregadores.
+            // Feeds RSS directos de medios en español. Conservamos DW como fuente principal
+            // y añadimos BBC Mundo y France 24 para ampliar la cobertura internacional.
             const feedUrls = [
-              "https://rss.dw.com/rdf/rss-sp-all"
+              "https://rss.dw.com/rdf/rss-sp-all",
+              "https://feeds.bbci.co.uk/mundo/rss.xml",
+              "https://www.france24.com/es/rss"
             ];
             const feedParts = [];
             for (const feedUrl of feedUrls) {
@@ -86,7 +89,14 @@ jobs:
               const rssImage = imageAttrs.src || imageAttrs["data-src"] || (mediaMatch ? (mediaMatch[1] || mediaMatch[2] || mediaMatch[3] || "") : "");
               const pubDate = tag(block, "pubDate") || tag(block, "dc:date");
               const title = rawTitle.trim();
-              const source = "DW Español";
+              let source = "Medio internacional";
+              try {
+                const host = new URL(link).hostname.toLowerCase();
+                if (host === "dw.com" || host.endsWith(".dw.com")) source = "DW Español";
+                else if (host === "bbc.co.uk" || host.endsWith(".bbc.co.uk") || host === "bbc.com" || host.endsWith(".bbc.com")) source = "BBC News Mundo";
+                else if (host === "france24.com" || host.endsWith(".france24.com")) source = "France 24 Español";
+                else source = host.replace(/^www\./, "");
+              } catch {}
               const date = pubDate ? new Date(pubDate) : new Date();
               return { title, link, description, fullText, source, date, rssImage };
             }).filter(x =>
@@ -232,9 +242,15 @@ jobs:
               if (!imageUrl && item.rssImage) {
                 try {
                   const rssCandidate = new URL(item.rssImage, item.link);
-                  if (rssCandidate.protocol === "https:" && (rssCandidate.hostname === "dw.com" || rssCandidate.hostname.endsWith(".dw.com"))) {
+                  const host = rssCandidate.hostname.toLowerCase();
+                  const trustedPublisherImage =
+                    host === "dw.com" || host.endsWith(".dw.com") ||
+                    host === "bbc.co.uk" || host.endsWith(".bbc.co.uk") ||
+                    host === "bbc.com" || host.endsWith(".bbc.com") ||
+                    host === "france24.com" || host.endsWith(".france24.com");
+                  if (rssCandidate.protocol === "https:" && trustedPublisherImage) {
                     imageUrl = rssCandidate.href;
-                    core.info("Se usará la imagen incluida en el feed oficial de DW.");
+                    core.info("Se usará la imagen incluida en el feed del medio original.");
                   }
                 } catch {}
               }
