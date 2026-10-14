@@ -2,7 +2,7 @@ name: Publicación automática de noticias internacionales
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "17 13,22 * * *"
   workflow_dispatch:
 
 permissions:
@@ -29,7 +29,7 @@ jobs:
               return;
             }
 
-            const feedUrl = "https://news.google.com/rss/search?q=noticias+internacionales+OR+emergencia+OR+inundaciones+OR+terremoto+when:2h&hl=es-419&gl=US&ceid=US:es-419";
+            const feedUrl = "https://news.google.com/rss/search?q=noticias+internacionales+OR+emergencia+OR+inundaciones+OR+terremoto+when:12h&hl=es-419&gl=US&ceid=US:es-419";
             const feedResponse = await fetch(feedUrl, {
               headers: { "User-Agent": "MundoAlDiaNewsBot/1.0 (editorial news monitoring)" }
             });
@@ -54,19 +54,24 @@ jobs:
               const block = m[1];
               const rawTitle = clean(tag(block, "title"));
               const link = tag(block, "link");
-              const description = clean(tag(block, "description"));
+              const rawDescription = tag(block, "description");
+              const description = clean(rawDescription);
+              const imageTag = rawDescription.match(/<img\b[^>]*>/i);
+              const imageAttrs = imageTag ? Object.fromEntries([...imageTag[0].matchAll(/([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)].map(a => [a[1].toLowerCase(), decode(a[2] ?? a[3] ?? a[4] ?? "")])) : {};
+              const mediaMatch = block.match(/<(?:media:content|media:thumbnail|enclosure)\b[^>]*url\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
+              const rssImage = imageAttrs.src || imageAttrs["data-src"] || (mediaMatch ? (mediaMatch[1] || mediaMatch[2] || mediaMatch[3] || "") : "");
               const pubDate = tag(block, "pubDate");
               const title = rawTitle.replace(/\s+-\s+[^-]+$/, "").trim();
               const sourceMatch = rawTitle.match(/\s+-\s+([^-]+)$/);
               const source = sourceMatch ? sourceMatch[1].trim() : "Google News";
               const date = pubDate ? new Date(pubDate) : new Date();
-              return { title, link, description, source, date };
+              return { title, link, description, source, date, rssImage };
             }).filter(x =>
               x.title.length >= 18 &&
               x.description.length >= 70 &&
               /^https:\/\//i.test(x.link) &&
               !Number.isNaN(x.date.getTime()) &&
-              Date.now() - x.date.getTime() < 6 * 60 * 60 * 1000
+              Date.now() - x.date.getTime() < 14 * 60 * 60 * 1000
             );
 
             if (!items.length) {
@@ -164,7 +169,17 @@ jobs:
                 "Fuente original: " + item.source,
                 item.link
               ].join("\n");
-              const imageUrl = await findArticleImage(item.link);
+              let imageUrl = "";
+              if (item.rssImage) {
+                try {
+                  const rssImageUrl = new URL(item.rssImage, item.link);
+                  if (rssImageUrl.protocol === "https:" && !/(logo|favicon|avatar|sprite|placeholder|icon)/i.test(rssImageUrl.pathname)) {
+                    imageUrl = rssImageUrl.href;
+                    core.info("Se encontró una imagen en el propio RSS de Google News.");
+                  }
+                } catch {}
+              }
+              if (!imageUrl) imageUrl = await findArticleImage(item.link);
               if (!imageUrl) {
                 core.warning("No se encontró una imagen pública verificable para esta noticia; se omite para evitar publicar artículos sin foto.");
                 continue;
