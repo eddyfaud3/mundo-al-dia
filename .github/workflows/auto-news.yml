@@ -29,15 +29,34 @@ jobs:
               return;
             }
 
-            const feedUrl = "https://news.google.com/rss/search?q=noticias+internacionales+OR+emergencia+OR+inundaciones+OR+terremoto+when:12h&hl=es-419&gl=US&ceid=US:es-419";
-            const feedResponse = await fetch(feedUrl, {
-              headers: { "User-Agent": "MundoAlDiaNewsBot/1.0 (editorial news monitoring)" }
-            });
-            if (!feedResponse.ok) {
-              core.setFailed(`No se pudo consultar el feed de noticias (HTTP ${feedResponse.status}).`);
+            // Usar feeds RSS directos de medios en español; los enlaces de Google News
+            // pueden quedarse en news.google.com y no permiten extraer la foto original.
+            const feedUrls = [
+              "https://rss.dw.com/rdf/rss-sp-all",
+              "https://www.bbc.com/mundo/index.xml"
+            ];
+            const feedParts = [];
+            for (const feedUrl of feedUrls) {
+              try {
+                const feedResponse = await fetch(feedUrl, {
+                  headers: { "User-Agent": "MundoAlDiaNewsBot/1.0 (editorial news monitoring)" },
+                  signal: AbortSignal.timeout(12000)
+                });
+                if (feedResponse.ok) {
+                  feedParts.push(await feedResponse.text());
+                  core.info("Feed consultado correctamente: " + new URL(feedUrl).hostname);
+                } else {
+                  core.warning("Feed no disponible (" + feedResponse.status + "): " + new URL(feedUrl).hostname);
+                }
+              } catch (error) {
+                core.warning("No se pudo consultar " + new URL(feedUrl).hostname + ": " + (error?.message || "error de red"));
+              }
+            }
+            if (!feedParts.length) {
+              core.setFailed("No se pudo consultar ningún feed directo de noticias.");
               return;
             }
-            const xml = await feedResponse.text();
+            const xml = feedParts.join("\\n");
             const decode = (s) => s
               .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
               .replace(/&amp;/g, "&").replace(/&quot;/g, '"')
