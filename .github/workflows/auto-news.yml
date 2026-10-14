@@ -2,7 +2,7 @@ name: Publicación automática de noticias internacionales
 
 on:
   schedule:
-    - cron: "15 * * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions:
