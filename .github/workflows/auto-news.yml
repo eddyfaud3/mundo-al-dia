@@ -85,17 +85,17 @@ jobs:
                 const html = (await response.text()).slice(0, 2000000);
                 const baseUrl = response.url || url;
                 const candidates = [];
-                const metas = html.match(/<meta\\b[^>]*>/gi) || [];
+                const metas = html.match(/<meta\b[^>]*>/gi) || [];
                 for (const meta of metas) {
-                  const key = meta.match(/(?:property|name)\\s*=\\s*["'](og:image|og:image:url|twitter:image|twitter:image:src)["']/i)?.[1];
+                  const key = meta.match(/(?:property|name)\s*=\s*["'](og:image|og:image:url|twitter:image|twitter:image:src)["']/i)?.[1];
                   if (!key) continue;
-                  const raw = meta.match(/content\\s*=\\s*["']([^"']+)["']/i)?.[1];
+                  const raw = meta.match(/content\s*=\s*["']([^"']+)["']/i)?.[1];
                   if (raw) candidates.push(raw);
                 }
-                const images = html.match(/<img\\b[^>]*>/gi) || [];
+                const images = html.match(/<img\b[^>]*>/gi) || [];
                 for (const tag of images.slice(0, 80)) {
-                  const raw = tag.match(/(?:src|data-src|data-original)\\s*=\\s*["']([^"']+)["']/i)?.[1];
-                  const alt = tag.match(/alt\\s*=\\s*["']([^"']*)["']/i)?.[1] || "";
+                  const raw = tag.match(/(?:src|data-src|data-original)\s*=\s*["']([^"']+)["']/i)?.[1];
+                  const alt = tag.match(/alt\s*=\s*["']([^"']*)["']/i)?.[1] || "";
                   if (raw && !/(logo|favicon|avatar|sprite|placeholder|icon)/i.test(alt + " " + raw)) candidates.push(raw);
                 }
                 for (const raw of candidates) {
@@ -109,7 +109,7 @@ jobs:
                       host === "gstatic.com" || host.endsWith(".gstatic.com") ||
                       host === "googleapis.com" || host.endsWith(".googleapis.com");
                     const looksGeneric = ["logo","favicon","icon","avatar","sprite","placeholder","default"].some(term => path.includes(term));
-                    const imageFile = /\\.(jpe?g|png|webp)(?:$|[?#])/i.test(image.href);
+                    const imageFile = /\.(jpe?g|png|webp)(?:$|[?#])/i.test(image.href);
                     if (image.protocol === "https:" && !isGoogleAsset && !looksGeneric && (imageFile || /image|photo|media|upload|content|article/i.test(path))) return image.href;
                   } catch {}
                 }
