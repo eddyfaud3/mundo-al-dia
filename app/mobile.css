@@ -418,3 +418,50 @@
     border-bottom: 0;
   }
 }
+
+
+/* Identidad visual renovada de Mundo al Día */
+.header {
+  background: #fff;
+  border-bottom: 3px solid #e11d2e;
+  box-shadow: 0 5px 20px rgba(7, 26, 67, .08);
+}
+.header .nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  min-height: 100px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.logo-brand {
+  display: flex;
+  align-items: center;
+  flex: 0 1 420px;
+  min-width: 0;
+  text-decoration: none;
+}
+.logo-brand img {
+  display: block;
+  width: 100%;
+  max-width: 410px;
+  height: auto;
+  max-height: 112px;
+  object-fit: contain;
+  object-position: left center;
+}
+.header .site-navigation { flex: 1 1 auto; }
+.header .navigation-links a { color: #0b1f4d; font-weight: 800; }
+.header .navigation-links a:hover { color: #dc1f30; }
+@media (max-width: 768px) {
+  .header .nav { min-height: 0; }
+  .logo-brand { flex: 1 1 100%; justify-content: center; }
+  .logo-brand img { max-width: 340px; max-height: 105px; object-position: center; }
+}
+@media (max-width: 600px) {
+  .header .nav { align-items: center; }
+  .logo-brand { width: 100%; }
+  .logo-brand img { max-width: 310px; max-height: 100px; }
+  .header .site-navigation { width: 100%; }
+}
