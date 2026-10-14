@@ -108,7 +108,7 @@ jobs:
                       host === "googleusercontent.com" || host.endsWith(".googleusercontent.com") ||
                       host === "gstatic.com" || host.endsWith(".gstatic.com") ||
                       host === "googleapis.com" || host.endsWith(".googleapis.com");
-                    const looksGeneric = /(?:^|[\\/_-])(logo|favicon|icon|avatar|sprite|placeholder|default)(?:[\\/_\\-.]|$)/i.test(path);
+                    const looksGeneric = ["logo","favicon","icon","avatar","sprite","placeholder","default"].some(term => path.includes(term));
                     const imageFile = /\\.(jpe?g|png|webp)(?:$|[?#])/i.test(image.href);
                     if (image.protocol === "https:" && !isGoogleAsset && !looksGeneric && (imageFile || /image|photo|media|upload|content|article/i.test(path))) return image.href;
                   } catch {}
