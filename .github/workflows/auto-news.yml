@@ -140,7 +140,10 @@ jobs:
                     const isGoogleAsset =
                       host === "google.com" || host.endsWith(".google.com") ||
                       host === "gstatic.com" || host.endsWith(".gstatic.com") ||
-                      host === "googleapis.com" || host.endsWith(".googleapis.com");
+                      host === "googleapis.com" || host.endsWith(".googleapis.com") ||
+                      host === "googleusercontent.com" || host.endsWith(".googleusercontent.com") ||
+                      host === "ggpht.com" || host.endsWith(".ggpht.com") ||
+                      host === "news.google.com" || host.endsWith(".news.google.com");
                     const looksGeneric = ["logo", "favicon", "icon", "avatar", "sprite", "placeholder", "default"].some(term => path.includes(term));
                     const isLikelyImage = candidate.meta || /\.(jpe?g|png|webp|avif)(?:$|[?#])/i.test(image.href) || /image|photo|media|upload|content|article|cdn/i.test(path);
                     if (image.protocol === "https:" && !isGoogleAsset && !looksGeneric && isLikelyImage) {
@@ -169,17 +172,8 @@ jobs:
                 "Fuente original: " + item.source,
                 item.link
               ].join("\n");
-              let imageUrl = "";
-              if (item.rssImage) {
-                try {
-                  const rssImageUrl = new URL(item.rssImage, item.link);
-                  if (rssImageUrl.protocol === "https:" && !/(logo|favicon|avatar|sprite|placeholder|icon)/i.test(rssImageUrl.pathname)) {
-                    imageUrl = rssImageUrl.href;
-                    core.info("Se encontró una imagen en el propio RSS de Google News.");
-                  }
-                } catch {}
-              }
-              if (!imageUrl) imageUrl = await findArticleImage(item.link);
+              // No usar miniaturas alojadas por Google News: buscamos la imagen editorial en la fuente original.
+              const imageUrl = await findArticleImage(item.link);
               if (!imageUrl) {
                 core.warning("No se encontró una imagen pública verificable para esta noticia; se omite para evitar publicar artículos sin foto.");
                 continue;
