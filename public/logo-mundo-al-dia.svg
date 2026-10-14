@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" role="img" aria-labelledby="title desc">
+<title id="title">Mundo al Día</title><desc id="desc">Logo de noticias internacionales con globo azul y detalles rojos.</desc>
+<defs><linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#168bff"/><stop offset=".55" stop-color="#063caa"/><stop offset="1" stop-color="#061b50"/></linearGradient><linearGradient id="red" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ff3939"/><stop offset="1" stop-color="#b60016"/></linearGradient><linearGradient id="silver" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#c9d7ef"/></linearGradient></defs>
+<path d="M95 112 Q180 25 365 32 Q490 -2 585 54 Q700 54 792 127 L835 186 793 244 Q720 285 610 277 L300 294 Q155 287 73 231 Q36 180 95 112Z" fill="#061744" stroke="#dbeafe" stroke-width="9"/>
+<path d="M77 184 Q160 81 329 86 Q500 13 688 96 Q749 117 808 161" fill="none" stroke="#087cff" stroke-width="15"/>
+<path d="M80 211 Q210 274 382 252 Q606 265 799 173" fill="none" stroke="#f21d2f" stroke-width="13"/>
+<circle cx="443" cy="94" r="78" fill="url(#blue)" stroke="#7fc5ff" stroke-width="5"/>
+<path d="M366 94h154M443 16c-25 24-37 50-37 78s12 54 37 78M443 16c25 24 37 50 37 78s-12 54-37 78M380 53q63 25 126 0M380 135q63-25 126 0" fill="none" stroke="#d9edff" stroke-width="3" opacity=".85"/>
+<path d="M391 54l20-19 15 9 2 20-20 16-17-8zM459 35l22 8 12 20-15 13-19-12zM424 105l22-13 23 10 8 23-26 23-20-13zM472 143l22-15 19 8-4 17-25 12z" fill="#fff" opacity=".95"/>
+<path d="M100 143 Q165 99 232 99" fill="none" stroke="#12a0ff" stroke-width="5" stroke-dasharray="4 8"/>
+<text x="450" y="197" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="900" font-style="italic" letter-spacing="-3" fill="url(#silver)" stroke="#06143d" stroke-width="13" paint-order="stroke">MUNDO</text>
+<path d="M125 205 L776 205 L737 275 L91 275Z" fill="url(#red)" stroke="#071b4b" stroke-width="8" stroke-linejoin="round"/>
+<text x="434" y="260" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="900" font-style="italic" letter-spacing="1" fill="#fff" stroke="#8b0014" stroke-width="2" paint-order="stroke">AL DÍA</text>
+<path d="M239 294h420" stroke="#ffcf27" stroke-width="4" stroke-linecap="round"/>
+<text x="449" y="317" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="800" letter-spacing="2" fill="#0b2d75">LAS NOTICIAS QUE IMPORTAN · DE TODO EL MUNDO</text>
+</svg>
