@@ -24,7 +24,9 @@ export default async function Home() {
     <main>
       <header className="header">
         <div className="container nav">
-          <a href="/" className="logo" aria-label="Mundo al Día, inicio">🌎 Mundo al Día</a>
+          <a href="/" className="logo logo-brand" aria-label="Mundo al Día, inicio">
+            <img src="/logo-mundo-al-dia.svg" alt="Mundo al Día — Las noticias que importan, de todo el mundo" />
+          </a>
           <NavigationMenu />
         </div>
       </header>
