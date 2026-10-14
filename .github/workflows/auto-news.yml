@@ -133,11 +133,11 @@ jobs:
                 item.link
               ].join("\n");
               const imageUrl = await findArticleImage(item.link);
-              if (!imageUrl) {
-                core.warning("Se omite esta noticia porque no se pudo encontrar una imagen pública; se probará otra noticia.");
-                continue;
+              if (imageUrl) {
+                core.info("Se encontró una imagen pública de la fuente.");
+              } else {
+                core.warning("No se encontró una imagen pública para esta noticia; se publicará el texto para no detener toda la automatización.");
               }
-              core.info("Se encontró una imagen pública de la fuente.");
 
               const article = {
                 title: item.title,
