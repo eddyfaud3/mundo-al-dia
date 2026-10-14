@@ -31,9 +31,9 @@ jobs:
 
             // Usar feeds RSS directos de medios en español; los enlaces de Google News
             // pueden quedarse en news.google.com y no permiten extraer la foto original.
+            // DW Español ofrece un feed directo con enlaces del medio; evitamos agregadores.
             const feedUrls = [
-              "https://rss.dw.com/rdf/rss-sp-all",
-              "https://www.bbc.com/mundo/index.xml"
+              "https://rss.dw.com/rdf/rss-sp-all"
             ];
             const feedParts = [];
             for (const feedUrl of feedUrls) {
@@ -74,17 +74,18 @@ jobs:
               const rawTitle = clean(tag(block, "title"));
               const link = tag(block, "link");
               const rawDescription = tag(block, "description");
-              const description = clean(rawDescription);
-              const imageTag = rawDescription.match(/<img\b[^>]*>/i);
-              const imageAttrs = imageTag ? Object.fromEntries([...imageTag[0].matchAll(/([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)].map(a => [a[1].toLowerCase(), decode(a[2] ?? a[3] ?? a[4] ?? "")])) : {};
-              const mediaMatch = block.match(/<(?:media:content|media:thumbnail|enclosure)\b[^>]*url\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
+              const rawEncoded = tag(block, "content:encoded") || tag(block, "content");
+              const fullText = clean(rawEncoded || rawDescription);
+              const description = clean(rawDescription) || fullText;
+              const imageTag = (rawDescription + " " + rawEncoded).match(/<img\\b[^>]*>/i);
+              const imageAttrs = imageTag ? Object.fromEntries([...imageTag[0].matchAll(/([^\\s=/>]+)\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))/g)].map(a => [a[1].toLowerCase(), decode(a[2] ?? a[3] ?? a[4] ?? "")])) : {};
+              const mediaMatch = block.match(/<(?:media:content|media:thumbnail|enclosure)\\b[^>]*url\\s*=\\s*(?:"([^"]+)"|'([^']+)'|([^\\s>]+))/i);
               const rssImage = imageAttrs.src || imageAttrs["data-src"] || (mediaMatch ? (mediaMatch[1] || mediaMatch[2] || mediaMatch[3] || "") : "");
-              const pubDate = tag(block, "pubDate");
-              const title = rawTitle.replace(/\s+-\s+[^-]+$/, "").trim();
-              const sourceMatch = rawTitle.match(/\s+-\s+([^-]+)$/);
-              const source = sourceMatch ? sourceMatch[1].trim() : "Google News";
+              const pubDate = tag(block, "pubDate") || tag(block, "dc:date");
+              const title = rawTitle.trim();
+              const source = "DW Español";
               const date = pubDate ? new Date(pubDate) : new Date();
-              return { title, link, description, source, date, rssImage };
+              return { title, link, description, fullText, source, date, rssImage };
             }).filter(x =>
               x.title.length >= 18 &&
               x.description.length >= 70 &&
@@ -182,15 +183,20 @@ jobs:
               .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 150).replace(/-+$/g, "");
             let lastError = "";
             for (const item of items.slice(0, 8)) {
+              const sourceText = item.fullText && item.fullText.length > item.description.length
+                ? item.fullText
+                : item.description;
               const excerpt = item.description.slice(0, 700);
               const content = [
-                item.description,
+                item.title,
                 "",
-                "Esta nota ofrece un resumen breve basado en la información publicada por " + item.source + ". Los detalles pueden actualizarse a medida que se conozcan nuevos datos.",
+                sourceText,
                 "",
-                "Fuente original: " + item.source,
-                item.link
-              ].join("\n");
+                "Esta publicación se basa en la información difundida por " + item.source + ". Para consultar la cobertura original y posibles actualizaciones, visita la fuente:",
+                item.link,
+                "",
+                "Fuente: " + item.source
+              ].join("\\n");
               // No usar miniaturas alojadas por Google News: buscamos la imagen editorial en la fuente original.
               const imageUrl = await findArticleImage(item.link);
               if (!imageUrl) {
