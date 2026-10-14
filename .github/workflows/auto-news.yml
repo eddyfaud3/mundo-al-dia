@@ -1,6 +1,9 @@
 name: Publicación automática de noticias internacionales
 
 on:
+  push:
+    paths:
+      - ".github/workflows/auto-news.yml"
   schedule:
     - cron: "17 13,22 * * *"
   workflow_dispatch:
@@ -99,6 +102,32 @@ jobs:
               return;
             }
 
+            async function fetchArticleText(url) {
+              try {
+                const response = await fetch(url, {
+                  headers: {
+                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml"
+                  },
+                  redirect: "follow",
+                  signal: AbortSignal.timeout(15000)
+                });
+                if (!response.ok) return "";
+                const html = (await response.text()).slice(0, 3000000);
+                const articleMatch = html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)
+                  || html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i);
+                const scope = articleMatch ? articleMatch[1] : html;
+                const paragraphs = [...scope.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)]
+                  .map(m => clean(m[1]))
+                  .filter(p => p.length >= 55)
+                  .filter(p => !/(cookies|suscr[ií]bete|aceptar todas|publicidad|síguenos en redes)/i.test(p));
+                return [...new Set(paragraphs)].join("\n\n").slice(0, 7000);
+              } catch (error) {
+                core.info("No se pudo extraer el texto ampliado: " + (error?.message || "error de lectura"));
+                return "";
+              }
+            }
+
             async function findArticleImage(url) {
               try {
                 const response = await fetch(url, {
@@ -183,24 +212,34 @@ jobs:
               .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 150).replace(/-+$/g, "");
             let lastError = "";
             for (const item of items.slice(0, 8)) {
-              const sourceText = item.fullText && item.fullText.length > item.description.length
-                ? item.fullText
-                : item.description;
+              const pageText = await fetchArticleText(item.link);
+              const sourceText = pageText.length >= 350
+                ? pageText
+                : (item.fullText && item.fullText.length > item.description.length ? item.fullText : item.description);
               const excerpt = item.description.slice(0, 700);
               const content = [
                 item.title,
                 "",
                 sourceText,
                 "",
-                "Esta publicación se basa en la información difundida por " + item.source + ". Para consultar la cobertura original y posibles actualizaciones, visita la fuente:",
+                "Esta noticia se preparó a partir de la cobertura publicada por " + item.source + ". Consulta la fuente original para verificar actualizaciones y detalles adicionales:",
                 item.link,
                 "",
                 "Fuente: " + item.source
               ].join("\n");
               // No usar miniaturas alojadas por Google News: buscamos la imagen editorial en la fuente original.
-              const imageUrl = await findArticleImage(item.link);
+              let imageUrl = await findArticleImage(item.link);
+              if (!imageUrl && item.rssImage) {
+                try {
+                  const rssCandidate = new URL(item.rssImage, item.link);
+                  if (rssCandidate.protocol === "https:" && (rssCandidate.hostname === "dw.com" || rssCandidate.hostname.endsWith(".dw.com"))) {
+                    imageUrl = rssCandidate.href;
+                    core.info("Se usará la imagen incluida en el feed oficial de DW.");
+                  }
+                } catch {}
+              }
               if (!imageUrl) {
-                core.warning("No se encontró una imagen pública verificable para esta noticia; se omite para evitar publicar artículos sin foto.");
+                core.warning("No se encontró una imagen pública de la fuente; se omite para evitar publicar artículos sin foto.");
                 continue;
               }
               core.info("Se encontró una imagen pública de la fuente: " + imageUrl);
