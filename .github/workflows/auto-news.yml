@@ -77,9 +77,9 @@ jobs:
               const rawEncoded = tag(block, "content:encoded") || tag(block, "content");
               const fullText = clean(rawEncoded || rawDescription);
               const description = clean(rawDescription) || fullText;
-              const imageTag = (rawDescription + " " + rawEncoded).match(/<img\\b[^>]*>/i);
-              const imageAttrs = imageTag ? Object.fromEntries([...imageTag[0].matchAll(/([^\\s=/>]+)\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))/g)].map(a => [a[1].toLowerCase(), decode(a[2] ?? a[3] ?? a[4] ?? "")])) : {};
-              const mediaMatch = block.match(/<(?:media:content|media:thumbnail|enclosure)\\b[^>]*url\\s*=\\s*(?:"([^"]+)"|'([^']+)'|([^\\s>]+))/i);
+              const imageTag = (rawDescription + " " + rawEncoded).match(/<img\b[^>]*>/i);
+              const imageAttrs = imageTag ? Object.fromEntries([...imageTag[0].matchAll(/([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)].map(a => [a[1].toLowerCase(), decode(a[2] ?? a[3] ?? a[4] ?? "")])) : {};
+              const mediaMatch = block.match(/<(?:media:content|media:thumbnail|enclosure)\b[^>]*url\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
               const rssImage = imageAttrs.src || imageAttrs["data-src"] || (mediaMatch ? (mediaMatch[1] || mediaMatch[2] || mediaMatch[3] || "") : "");
               const pubDate = tag(block, "pubDate") || tag(block, "dc:date");
               const title = rawTitle.trim();
@@ -196,7 +196,7 @@ jobs:
                 item.link,
                 "",
                 "Fuente: " + item.source
-              ].join("\\n");
+              ].join("\n");
               // No usar miniaturas alojadas por Google News: buscamos la imagen editorial en la fuente original.
               const imageUrl = await findArticleImage(item.link);
               if (!imageUrl) {
