@@ -74,6 +74,30 @@ jobs:
               return;
             }
 
+            async function findArticleImage(url) {
+              try {
+                const response = await fetch(url, {
+                  headers: { "User-Agent": "Mozilla/5.0 (compatible; MundoAlDiaNewsBot/1.0)" },
+                  signal: AbortSignal.timeout(8000)
+                });
+                if (!response.ok) return "";
+                const html = (await response.text()).slice(0, 1500000);
+                const metas = html.match(/<meta\b[^>]*>/gi) || [];
+                for (const meta of metas) {
+                  const property = meta.match(/(?:property|name)\s*=\s*["'](og:image|twitter:image|twitter:image:src)["']/i)?.[1];
+                  if (!property) continue;
+                  const raw = meta.match(/content\s*=\s*["']([^"']+)["']/i)?.[1];
+                  if (!raw) continue;
+                  const candidate = raw.replace(/&amp;/g, "&").trim();
+                  const image = new URL(candidate, response.url);
+                  if (image.protocol === "https:" && !image.hostname.endsWith("google.com")) return image.href;
+                }
+              } catch (error) {
+                core.info("No se pudo obtener la imagen de la fuente: " + (error?.message || "error de lectura"));
+              }
+              return "";
+            }
+
             const slugify = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
               .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 150).replace(/-+$/g, "");
             let lastError = "";
@@ -87,13 +111,17 @@ jobs:
                 "Fuente original: " + item.source,
                 item.link
               ].join("\n");
+              const imageUrl = await findArticleImage(item.link);
+              if (imageUrl) core.info("Se encontró una imagen de la fuente para la noticia.");
+              else core.warning("La fuente no ofrece una imagen pública; la noticia se publicará sin foto.");
+
               const article = {
                 title: item.title,
                 slug: slugify(item.title),
                 excerpt,
                 content,
                 category: "Internacional",
-                image_url: "",
+                image_url: imageUrl,
                 video_url: ""
               };
               if (!article.slug) continue;
