@@ -2,6 +2,9 @@ import { getPool, initDb } from "../../../lib/db";
 import ArticleEngagement from "../../../components/ArticleEngagement";
 import ArticleComments from "../../../components/ArticleComments";
 
+const siteUrl = "https://mundo-al-dia-github-production.up.railway.app";
+const siteLogo = `${siteUrl}/logo-mundo-al-dia.svg`;
+
 export const dynamic = "force-dynamic";
 
 async function getNoticia(slug) {
@@ -33,24 +36,35 @@ export async function generateMetadata({ params }) {
   if (!noticia) {
     return {
       title: "Noticia no encontrada",
-      description: "La noticia que buscas no está disponible."
+      description: "La noticia que buscas no está disponible.",
+      robots: { index: false, follow: true }
     };
   }
 
+  const articleUrl = `${siteUrl}/noticia/${noticia.slug}`;
+  const description = noticia.excerpt || "Lee las últimas noticias internacionales en Mundo al Día.";
+  const images = noticia.image_url ? [{ url: noticia.image_url, alt: noticia.title }] : [];
+
   return {
     title: noticia.title,
-    description: noticia.excerpt || "Lee las últimas noticias en Mundo al Día.",
+    description,
+    alternates: { canonical: articleUrl },
     openGraph: {
       title: noticia.title,
-      description: noticia.excerpt || "Lee las últimas noticias en Mundo al Día.",
+      description,
+      url: articleUrl,
+      siteName: "Mundo al Día",
+      locale: "es_ES",
       type: "article",
-      images: noticia.image_url ? [{ url: noticia.image_url, alt: noticia.title }] : [],
-      publishedTime: noticia.created_at ? new Date(noticia.created_at).toISOString() : undefined
+      images,
+      publishedTime: noticia.created_at ? new Date(noticia.created_at).toISOString() : undefined,
+      modifiedTime: noticia.updated_at ? new Date(noticia.updated_at).toISOString() : undefined,
+      section: noticia.category || "Mundo"
     },
     twitter: {
       card: noticia.image_url ? "summary_large_image" : "summary",
       title: noticia.title,
-      description: noticia.excerpt || "Lee las últimas noticias en Mundo al Día.",
+      description,
       images: noticia.image_url ? [noticia.image_url] : []
     }
   };
@@ -68,7 +82,7 @@ function getVideoEmbed(url) {
     }
 
     if (parsed.hostname === "youtu.be") {
-      return `https://www.youtube.com/embed${parsed.pathname}`;
+      return idFromShortUrl(parsed.pathname);
     }
 
     if (parsed.hostname.includes("vimeo.com")) {
@@ -80,6 +94,11 @@ function getVideoEmbed(url) {
   }
 
   return null;
+}
+
+function idFromShortUrl(pathname) {
+  const id = pathname.replace(/^\/+|\/+$/g, "");
+  return id ? `https://www.youtube.com/embed/${id}` : null;
 }
 
 function formatDate(value) {
@@ -108,35 +127,49 @@ export default async function NoticiaPage({ params }) {
     noticia.video_url && !embedUrl
       ? /\.(mp4|webm|ogg)(\?.*)?$/i.test(noticia.video_url)
       : false;
+  const articleUrl = `${siteUrl}/noticia/${noticia.slug}`;
+  const publishedDate = noticia.created_at ? new Date(noticia.created_at).toISOString() : undefined;
+  const modifiedDate = noticia.updated_at
+    ? new Date(noticia.updated_at).toISOString()
+    : publishedDate;
 
   const articleSchema = {
     "@context": "https://schema.org",
     "@type": "NewsArticle",
     headline: noticia.title,
     description: noticia.excerpt || "Lee las últimas noticias en Mundo al Día.",
-    datePublished: noticia.created_at ? new Date(noticia.created_at).toISOString() : undefined,
-    dateModified: noticia.updated_at ? new Date(noticia.updated_at).toISOString() : (noticia.created_at ? new Date(noticia.created_at).toISOString() : undefined),
+    datePublished: publishedDate,
+    dateModified: modifiedDate,
     mainEntityOfPage: {
       "@type": "WebPage",
-      "@id": `https://mundo-al-dia-github-production.up.railway.app/noticia/${noticia.slug}`
+      "@id": articleUrl
     },
     author: {
       "@type": "Organization",
-      name: "Mundo al Día"
+      name: "Mundo al Día",
+      url: siteUrl
     },
     publisher: {
       "@type": "Organization",
-      name: "Mundo al Día"
+      name: "Mundo al Día",
+      url: siteUrl,
+      logo: {
+        "@type": "ImageObject",
+        url: siteLogo
+      }
     },
     image: noticia.image_url ? [noticia.image_url] : undefined,
-    articleSection: noticia.category || "Mundo"
+    articleSection: noticia.category || "Mundo",
+    inLanguage: "es"
   };
 
   return (
     <main>
       <header className="header">
         <div className="container nav">
-          <div className="logo">🌎 Mundo al Día</div>
+          <a href="/" className="logo logo-brand" aria-label="Mundo al Día, inicio">
+            <img src="/logo-mundo-al-dia.svg" alt="Mundo al Día" />
+          </a>
           <a className="header-back" href="/">← Inicio</a>
         </div>
       </header>
@@ -213,6 +246,11 @@ export default async function NoticiaPage({ params }) {
           </div>
         </div>
       </article>
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema).replace(/</g, "\\u003c") }}
+      />
 
       {relacionadas.length > 0 && (
         <section className="related-news">
