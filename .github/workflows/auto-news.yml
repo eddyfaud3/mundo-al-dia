@@ -77,43 +77,74 @@ jobs:
             async function findArticleImage(url) {
               try {
                 const response = await fetch(url, {
-                  headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36" },
+                  headers: {
+                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml"
+                  },
                   redirect: "follow",
-                  signal: AbortSignal.timeout(10000)
+                  signal: AbortSignal.timeout(15000)
                 });
-                if (!response.ok) return "";
-                const html = (await response.text()).slice(0, 2000000);
+                if (!response.ok) {
+                  core.info("La página de la fuente respondió HTTP " + response.status + ".");
+                  return "";
+                }
+                const html = (await response.text()).slice(0, 3000000);
                 const baseUrl = response.url || url;
                 const candidates = [];
+                const decodeHtml = (s) => s
+                  .replace(/&amp;/g, "&").replace(/&quot;/g, '"')
+                  .replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<")
+                  .replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+                  .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)));
+                const attrs = (tag) => {
+                  const out = {};
+                  for (const m of tag.matchAll(/([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)) {
+                    out[m[1].toLowerCase()] = decodeHtml(m[2] ?? m[3] ?? m[4] ?? "");
+                  }
+                  return out;
+                };
                 const metas = html.match(/<meta\b[^>]*>/gi) || [];
                 for (const meta of metas) {
-                  const key = meta.match(/(?:property|name)\s*=\s*["'](og:image|og:image:url|twitter:image|twitter:image:src)["']/i)?.[1];
-                  if (!key) continue;
-                  const raw = meta.match(/content\s*=\s*["']([^"']+)["']/i)?.[1];
-                  if (raw) candidates.push({ raw, meta: true });
+                  const a = attrs(meta);
+                  const key = (a.property || a.name || a.itemprop || "").toLowerCase();
+                  if (["og:image", "og:image:url", "twitter:image", "twitter:image:src", "image"].includes(key) && a.content) {
+                    candidates.push({ raw: a.content, meta: true });
+                  }
+                }
+                const linkTags = html.match(/<link\b[^>]*>/gi) || [];
+                for (const linkTag of linkTags) {
+                  const a = attrs(linkTag);
+                  if ((a.rel || "").toLowerCase().split(/\s+/).includes("image_src") && a.href) {
+                    candidates.push({ raw: a.href, meta: true });
+                  }
                 }
                 const images = html.match(/<img\b[^>]*>/gi) || [];
-                for (const tag of images.slice(0, 80)) {
-                  const raw = tag.match(/(?:src|data-src|data-original)\s*=\s*["']([^"']+)["']/i)?.[1];
-                  const alt = tag.match(/alt\s*=\s*["']([^"']*)["']/i)?.[1] || "";
-                  if (raw && !/(logo|favicon|avatar|sprite|placeholder|icon)/i.test(alt + " " + raw)) candidates.push({ raw, meta: false });
+                for (const imageTag of images.slice(0, 100)) {
+                  const a = attrs(imageTag);
+                  const raw = a.src || a["data-src"] || a["data-lazy-src"] || a["data-original"] || a["data-original-src"] || (a.srcset || "").split(",")[0].trim().split(/\s+/)[0];
+                  const alt = a.alt || "";
+                  if (raw && !/(logo|favicon|avatar|sprite|placeholder|icon)/i.test(alt + " " + raw)) {
+                    candidates.push({ raw, meta: false });
+                  }
                 }
                 for (const candidate of candidates) {
                   try {
-                    const raw = candidate.raw;
-                    const image = new URL(raw.replace(/&amp;/g, "&").trim(), baseUrl);
+                    const image = new URL(candidate.raw.trim(), baseUrl);
                     const host = image.hostname.toLowerCase();
                     const path = image.pathname.toLowerCase();
                     const isGoogleAsset =
                       host === "google.com" || host.endsWith(".google.com") ||
-                      host === "googleusercontent.com" || host.endsWith(".googleusercontent.com") ||
                       host === "gstatic.com" || host.endsWith(".gstatic.com") ||
                       host === "googleapis.com" || host.endsWith(".googleapis.com");
-                    const looksGeneric = ["logo","favicon","icon","avatar","sprite","placeholder","default"].some(term => path.includes(term));
-                    const imageFile = /\.(jpe?g|png|webp)(?:$|[?#])/i.test(image.href);
-                    if (image.protocol === "https:" && !isGoogleAsset && !looksGeneric && (candidate.meta || imageFile || /image|photo|media|upload|content|article/i.test(path))) return image.href;
+                    const looksGeneric = ["logo", "favicon", "icon", "avatar", "sprite", "placeholder", "default"].some(term => path.includes(term));
+                    const isLikelyImage = candidate.meta || /\.(jpe?g|png|webp|avif)(?:$|[?#])/i.test(image.href) || /image|photo|media|upload|content|article|cdn/i.test(path);
+                    if (image.protocol === "https:" && !isGoogleAsset && !looksGeneric && isLikelyImage) {
+                      core.info("Se encontró una imagen candidata en " + host + ".");
+                      return image.href;
+                    }
                   } catch {}
                 }
+                core.info("No se encontraron metadatos de imagen válidos en " + new URL(baseUrl).hostname + ".");
               } catch (error) {
                 core.info("No se pudo obtener la imagen de la fuente: " + (error?.message || "error de lectura"));
               }
