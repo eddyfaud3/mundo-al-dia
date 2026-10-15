@@ -292,9 +292,14 @@ jobs:
 
               core.info("Noticia publicada en el sitio: " + result.url);
               if (result.facebook?.published) {
-                core.info("Resumen publicado también en Facebook.");
+                core.info("Publicación confirmada en Facebook: " + (result.facebook.pageName || "página conectada"));
               } else {
                 core.warning("La noticia está en el sitio, pero Facebook no confirmó la publicación: " + (result.facebook?.reason || "sin detalles"));
+              }
+              if (result.instagram?.published) {
+                core.info("Publicación con foto confirmada en Instagram: @" + (result.instagram.username || "cuenta conectada"));
+              } else {
+                core.warning("Instagram no confirmó la publicación: " + (result.instagram?.reason || "sin detalles"));
               }
               return;
             }
