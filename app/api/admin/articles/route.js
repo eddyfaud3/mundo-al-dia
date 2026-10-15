@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { cookieName, validToken } from "../../../../lib/auth";
 import { getPool, initDb } from "../../../../lib/db";
-import { publishArticleToFacebook } from "../../../../lib/facebook";
+import { publishArticleToFacebook, publishArticleToInstagram } from "../../../../lib/facebook";
 
 async function auth() {
   const token = cookies().get(cookieName)?.value;
@@ -35,6 +35,7 @@ export async function POST(request) {
 
     const article = rows[0];
     let facebook = null;
+    let instagram = null;
     if (article.published) {
       try {
         facebook = await publishArticleToFacebook(article);
@@ -48,9 +49,14 @@ export async function POST(request) {
       } catch (facebookError) {
         facebook = { published:false, reason:facebookError.message };
       }
+      try {
+        instagram = await publishArticleToInstagram(article);
+      } catch (instagramError) {
+        instagram = { published:false, reason:instagramError.message || "Error de Instagram." };
+      }
     }
 
-    return NextResponse.json({ ...article, facebook }, {status:201});
+    return NextResponse.json({ ...article, facebook, instagram }, {status:201});
   } catch(e) {
     return NextResponse.json({error:e.message},{status:400});
   }
