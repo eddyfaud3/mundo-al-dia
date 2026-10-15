@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { cookieName, validToken } from "../../../../../lib/auth";
 import { getPool, initDb } from "../../../../../lib/db";
-import { publishArticleToFacebook } from "../../../../../lib/facebook";
+import { publishArticleToFacebook, publishArticleToInstagram } from "../../../../../lib/facebook";
 
 async function auth() {
   if (!validToken(cookies().get(cookieName)?.value)) return null;
@@ -36,6 +36,7 @@ export async function PUT(request,{params}) {
 
     const article = rows[0];
     let facebook = null;
+    let instagram = null;
 
     if (article.published && (!wasPublished || !alreadyPosted)) {
       try {
@@ -50,9 +51,14 @@ export async function PUT(request,{params}) {
       } catch (facebookError) {
         facebook = { published:false, reason:facebookError.message };
       }
+      try {
+        instagram = await publishArticleToInstagram(article);
+      } catch (instagramError) {
+        instagram = { published:false, reason:instagramError.message || "Error de Instagram." };
+      }
     }
 
-    return NextResponse.json({ ...article, facebook });
+    return NextResponse.json({ ...article, facebook, instagram });
   }catch(e){return NextResponse.json({error:e.message},{status:400});}
 }
 
