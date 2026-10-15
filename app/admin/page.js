@@ -14,11 +14,14 @@ export default function AdminPage(){
   const [uploadMessage,setUploadMessage]=useState("");
   const [facebook,setFacebook]=useState({configured:false,connected:false,pageName:""});
   const [facebookMessage,setFacebookMessage]=useState("");
+  const [instagram,setInstagram]=useState({configured:true,connected:false,username:""});
+  const [instagramMessage,setInstagramMessage]=useState("");
 
   async function load(){setLoading(true);const r=await fetch("/api/admin/articles",{cache:"no-store"});if(r.status===401){location.href="/admin/login";return;}const d=await r.json();if(!r.ok){setError(d.error||"Error");setLoading(false);return;}setArticles(d);setLoading(false);}
   async function loadFacebook(){const r=await fetch("/api/facebook/status",{cache:"no-store"});if(r.status===401){location.href="/admin/login";return;}if(r.ok)setFacebook(await r.json());}
+  async function loadInstagram(){const r=await fetch("/api/instagram/status",{cache:"no-store"});if(r.status===401){location.href="/admin/login";return;}if(r.ok)setInstagram(await r.json());}
 
-  useEffect(()=>{load();loadFacebook();const params=new URLSearchParams(location.search);const fb=params.get("facebook");const name=params.get("name");if(fb==="connected"){setFacebookMessage(`✅ Facebook conectado: ${name||"Mundo al Día"}`);loadFacebook();history.replaceState({}, "", "/admin");}else if(fb?.startsWith("error:")){setFacebookMessage("❌ "+fb.slice(6));history.replaceState({}, "", "/admin");}},[]);
+  useEffect(()=>{load();loadFacebook();loadInstagram();const params=new URLSearchParams(location.search);const fb=params.get("facebook");const name=params.get("name");const ig=params.get("instagram");const igName=params.get("instagramName");const igReason=params.get("instagramReason");if(fb==="connected"){setFacebookMessage(`✅ Facebook conectado: ${name||"Mundo al Día"}`);loadFacebook();}else if(fb?.startsWith("error:")){setFacebookMessage("❌ "+fb.slice(6));}if(ig==="connected"){setInstagramMessage(`✅ Instagram conectado: @${igName||"Instagram"}`);loadInstagram();}else if(ig==="error"){setInstagramMessage("⚠️ Facebook está conectado, pero Instagram no: "+(igReason||"revisa que la cuenta profesional esté vinculada a la página y que Meta permita los permisos de Instagram."));}if(fb||ig)history.replaceState({}, "", "/admin");},[]);
 
   function edit(a){setEditing(a.id);setForm({...a});window.scrollTo({top:0,behavior:"smooth"});}
   function change(e){const {name,value,type,checked}=e.target;setForm({...form,[name]:type==="checkbox"?checked:value});}
@@ -29,9 +32,15 @@ export default function AdminPage(){
   async function remove(id){if(!confirm("¿Eliminar esta noticia?"))return;const r=await fetch("/api/admin/articles/"+id,{method:"DELETE"});if(r.ok)load();else setError("No se pudo eliminar.");}
   async function logout(){await fetch("/api/admin/logout",{method:"POST"});location.href="/admin/login";}
   async function disconnectFacebook(){if(!confirm("¿Desconectar Facebook de Mundo al Día?"))return;const r=await fetch("/api/facebook/disconnect",{method:"POST"});if(r.ok){setFacebook({configured:true,connected:false,pageName:""});setFacebookMessage("Facebook desconectado.");}}
+  async function disconnectInstagram(){if(!confirm("¿Desconectar Instagram de Mundo al Día?"))return;const r=await fetch("/api/instagram/disconnect",{method:"POST"});if(r.ok){setInstagram({configured:true,connected:false,username:""});setInstagramMessage("Instagram desconectado.");}}
 
   return <main className="admin-page"><div className="admin-container">
     <header style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap"}}><div><h1>🌎 Mundo al Día — Admin</h1><p>Gestiona tus noticias.</p></div><div><a href="/" style={{marginRight:15}}>Ver sitio</a><button onClick={logout}>Cerrar sesión</button></div></header>
+
+    <section style={{border:"1px solid #ddd",borderRadius:12,padding:20,marginTop:20}}><h2>📸 Publicación automática en Instagram</h2>
+      {instagram.connected?<div><p>✅ Conectado a Instagram <strong>@{ "{instagram.username}" }</strong>.</p><p style={{fontSize:14}}>Las noticias nuevas con foto pública se publicarán también en Instagram.</p><button type="button" onClick={disconnectInstagram}>Desconectar Instagram</button></div>:<div><p>Instagram todavía no está conectado. Pulsa para autorizar Instagram desde Meta; se conservará la conexión actual de Facebook.</p><a className="button" href="/api/facebook/connect">🔗 Conectar / autorizar Instagram</a></div>}
+      {instagramMessage&&<p style={{marginTop:12}}>{ "{instagramMessage}" }</p>}
+    </section>
 
     <section style={{border:"1px solid #ddd",borderRadius:12,padding:20,marginTop:20}}><h2>📘 Publicación automática en Facebook</h2>
       {!facebook.configured?<p>⚠️ Falta configurar la aplicación de Meta en Railway.</p>:facebook.connected?<div><p>✅ Conectado a la página <strong>{facebook.pageName}</strong>.</p><p style={{fontSize:14}}>Cuando publiques una noticia nueva, Mundo al Día intentará publicarla automáticamente en Facebook.</p><button type="button" onClick={disconnectFacebook}>Desconectar Facebook</button></div>:<div><p>Conecta tu página de Facebook para activar la publicación automática.</p><a className="button" href="/api/facebook/connect">🔗 Conectar Facebook</a></div>}
