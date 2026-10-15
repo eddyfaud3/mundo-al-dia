@@ -37,7 +37,10 @@ export async function GET(request) {
 
   try {
     const page = await saveFacebookAuthorization(code);
-    const response = NextResponse.redirect(new URL("/admin?facebook=connected&name=" + encodeURIComponent(page.name), site));
+    const instagramParams = page.instagram?.connected
+      ? "&instagram=connected&instagramName=" + encodeURIComponent(page.instagram.username || "Instagram")
+      : "&instagram=error&instagramReason=" + encodeURIComponent(page.instagram?.reason || "No se encontró una cuenta profesional de Instagram vinculada.");
+    const response = NextResponse.redirect(new URL("/admin?facebook=connected&name=" + encodeURIComponent(page.name) + instagramParams, site));
     response.cookies.delete("mundo_fb_oauth_state");
     return response;
   } catch (error) {
