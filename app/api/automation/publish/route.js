@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { getPool, initDb } from "../../../../lib/db";
-import { publishArticleToFacebook } from "../../../../lib/facebook";
+import { publishArticleToFacebook, publishArticleToInstagram } from "../../../../lib/facebook";
 
 export const runtime = "nodejs";
 
@@ -72,12 +72,20 @@ export async function POST(request) {
       facebook = { published: false, reason: error?.message || "Error de Facebook." };
     }
 
+    let instagram = { published: false, reason: "Instagram no está conectado." };
+    try {
+      instagram = await publishArticleToInstagram(article);
+    } catch (error) {
+      instagram = { published: false, reason: error?.message || "Error de Instagram." };
+    }
+
     return NextResponse.json({
       published: true,
       id: article.id,
       title: article.title,
       url: `${process.env.NEXT_PUBLIC_SITE_URL || "https://mundo-al-dia-github-production.up.railway.app"}/noticia/${encodeURIComponent(article.slug)}`,
       facebook,
+      instagram,
     }, { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: error?.message || "No se pudo publicar la noticia." }, { status: 500 });
