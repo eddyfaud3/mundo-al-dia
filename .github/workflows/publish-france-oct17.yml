@@ -1,0 +1,64 @@
+name: Publicar noticia verificada de Francia del 17 de octubre
+
+on:
+  push:
+    paths:
+      - ".github/workflows/publish-france-oct17.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  publish-france:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Publicar noticia con foto y redes sociales
+        uses: actions/github-script@v7
+        env:
+          AUTOMATION_SECRET: ${{ secrets.MUNDO_AL_DIA_AUTOMATION_SECRET }}
+          SITE_URL: https://mundo-al-dia-github-production.up.railway.app
+        with:
+          script: |
+            if (!process.env.AUTOMATION_SECRET) {
+              core.setFailed("Falta MUNDO_AL_DIA_AUTOMATION_SECRET en GitHub Actions.");
+              return;
+            }
+
+            const sourceUrl = "https://www.lemonde.fr/societe/live/2026/10/17/en-direct-manifestations-du-17-octobre-le-gouvernement-annonce-550-000-manifestants-les-organisateurs-800-000-environ-400-interpellations-des-violences-urbaines-d-une-gravite-inouie-se-sont-deroulees-et-se-deroulent-encore_6795855_3224.html";
+            const imageUrl = "https://img.lemde.fr/2026/10/17/0/0/2048/1365/1000/666/75/0/ac8d91b_upload-1-fcxu1nz28st7-whatsapp-image-2026-10-17-at-22-10-06-1.jpeg";
+
+            const article = {
+              title: "ÚLTIMA HORA | Francia vive una jornada de tensión: enfrentamientos entre manifestantes y policías en varias ciudades",
+              slug: "francia-protestas-enfrentamientos-policia-paris-lyon-marsella-17-octubre-2026",
+              excerpt: "Entre 550.000 y 800.000 personas participaron en manifestaciones en Francia. Se reportaron enfrentamientos y alrededor de 400 detenciones, según el Ministerio del Interior.",
+              category: "Internacional",
+              image_url: imageUrl,
+              video_url: "",
+              content: `Fecha: 17 de octubre de 2026\n\nUbicación: Francia\n\nFrancia vivió este sábado una jornada de fuertes tensiones durante manifestaciones celebradas en distintas ciudades del país. Según el Ministerio del Interior, unas 550.000 personas participaron en 110 marchas; los organizadores elevaron la cifra a alrededor de 800.000.\n\nEn París y otras ciudades se registraron enfrentamientos entre algunos manifestantes y fuerzas de seguridad, incendios, lanzamiento de objetos, daños a edificios públicos y comercios, y uso de gases lacrimógenos. También se reportaron incidentes en Lyon, Marsella, Lille y Limoges.\n\nLas protestas estuvieron relacionadas con el aumento del costo de vida, las condiciones de los servicios públicos y las demandas de estudiantes por mejores condiciones educativas y más recursos para las escuelas. Aunque numerosos participantes marcharon pacíficamente, algunos grupos protagonizaron actos de violencia y vandalismo.\n\nEl ministro del Interior, Laurent Nuñez, informó de alrededor de 400 personas detenidas, según la cobertura en directo de Le Monde. Las cifras de participación varían entre las autoridades y los organizadores.\n\n¿Qué se sabe del video que circula en redes sociales?\n\nEn redes sociales circulan imágenes de escenas de tensión en Francia. Sin embargo, no se ha confirmado de forma independiente que el video compartido en Instagram corresponda exactamente a los acontecimientos del 17 de octubre. Por eso, no debe atribuirse a un lugar o incidente específico sin verificar su origen y fecha.\n\nMundo al Día continuará atento a las actualizaciones sobre la situación en Francia.\n\nFuentes: Reuters, Le Monde y The Guardian.\n\nCobertura de Le Monde: ${sourceUrl}\nReuters Connect: https://www.reutersconnect.com/item/french-police-clash-with-protesters-in-paris-over-rising-living-costs-2/dGFnOnJldXRlcnMuY29tLDIwMjY6bmV3c21sX09XQU5BQ0FBVklERU8yMDI2MTAxNzQyNzg0NjQ2\nThe Guardian: https://www.theguardian.com/world/2026/oct/17/french-police-uk-funded-4x4-vehicle-ram-student-protesters\n\nFoto: Adrienne Surprenant / MYOP para Le Monde. La imagen corresponde a las manifestaciones del 17 de octubre de 2026 en París.\n\nMundo al Día — El mundo, al día.`
+            };
+
+            const response = await fetch(new URL("/api/automation/publish", process.env.SITE_URL), {
+              method: "POST",
+              headers: {
+                "Authorization": "Bearer " + process.env.AUTOMATION_SECRET,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(article)
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              core.setFailed("No se pudo publicar la noticia: " + (result.error || "HTTP " + response.status));
+              return;
+            }
+            core.info("Noticia publicada en el sitio: " + result.url);
+            if (result.facebook?.published) {
+              core.info("Facebook: publicación confirmada.");
+            } else {
+              core.warning("La noticia está en el sitio, pero Facebook no confirmó la publicación: " + (result.facebook?.reason || "sin detalles"));
+            }
+            if (result.instagram?.published) {
+              core.info("Instagram: publicación confirmada.");
+            } else {
+              core.warning("Instagram no confirmó la publicación: " + (result.instagram?.reason || "sin detalles"));
+            }
