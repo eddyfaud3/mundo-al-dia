@@ -1,6 +1,7 @@
 name: Publicar noticia del accidente en Alamodome del 17 de octubre
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - ".github/workflows/publish-alamodome-oct19.yml"
