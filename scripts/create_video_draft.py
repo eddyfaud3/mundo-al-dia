@@ -59,11 +59,11 @@ def download_verified_commons_photo(out_dir):
             target.write(response.read())
         # Store the source page and the license label so a reviewer can independently verify them.
         (out_dir / "FUENTE_Y_LICENCIA_FOTO.txt").write_text(
-            "FOTO DE PRUEBA — no representa una noticia actual.\\n"
-            f"Archivo: {title}\\nFuente verificable: {page_url}\\n"
-            f"Licencia declarada en Wikimedia Commons: {license_name}\\n"
-            f"Autor/crédito indicado: {credit or 'No indicado'}\\n"
-            "Revisar la página original y sus condiciones antes de cualquier publicación.\\n",
+            "FOTO DE PRUEBA — no representa una noticia actual.\n"
+            f"Archivo: {title}\nFuente verificable: {page_url}\n"
+            f"Licencia declarada en Wikimedia Commons: {license_name}\n"
+            f"Autor/crédito indicado: {credit or 'No indicado'}\n"
+            "Revisar la página original y sus condiciones antes de cualquier publicación.\n",
             encoding="utf-8",
         )
         return out_path
@@ -160,10 +160,8 @@ def draw_visual(im, d, body, index):
             photo = photo.crop((left, top, left + side, top + side))
             mask = Image.new("L", (side, side), 0)
             ImageDraw.Draw(mask).ellipse((0, 0, side - 1, side - 1), fill=255)
-            im = photo
-            # Paste into the already-rendered scene via a circular alpha mask.
-            scene_im = im
-            scene_im.paste(photo, (cx - r, cy - r), mask)
+            # Paste the cropped real photo into the scene, clipped to a circular globe.
+            im.paste(photo, (cx - r, cy - r), mask)
             d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=CYAN, width=7)
         else:
             d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(13, 92, 145), outline=CYAN, width=6)
