@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Create an ORIGINAL Mundo al Día vertical video draft from editor-verified Spanish text.
-Uses licensed context photos and a local Spanish neural TTS voice. No publication side effects.
+Uses images extracted from the exact source article for draft review; reuse rights must be verified separately.
+Uses a local Spanish neural TTS voice. No publication side effects.
 """
 import argparse
 import os
