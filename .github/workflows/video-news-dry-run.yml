@@ -32,7 +32,7 @@ jobs:
             ];
             const reports = [];
             const decode = (s) => s
-              .replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g, "$1")
+              .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
               .replace(/&amp;/g, "&").replace(/&quot;/g, '"')
               .replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<")
               .replace(/&gt;/g, ">");
@@ -50,27 +50,27 @@ jobs:
               const host = new URL(url).hostname;
               try {
                 const response = await fetch(url, {
-                  headers: { "User-Agent": "MundoAlDiaVideoDryRun/1.1" },
+                  headers: { "User-Agent": "MundoAlDiaVideoDryRun/1.2" },
                   signal: AbortSignal.timeout(12000)
                 });
                 if (!response.ok) throw new Error("HTTP " + response.status);
                 const xml = await response.text();
-                const items = [...xml.matchAll(/<(?:item|entry)\\b[^>]*>([\\s\\S]*?)<\\/(?:item|entry)>/gi)];
+                const items = [...xml.matchAll(/<(?:item|entry)\b[^>]*>([\s\S]*?)<\/(?:item|entry)>/gi)];
                 const mediaCandidates = [];
                 const platformCandidates = [];
                 const likelyVideoStories = [];
                 for (const match of items) {
                   const block = match[1];
                   const title = tagText(block, "title") || "(sin título)";
-                  const urlsInItem = [...block.matchAll(/https?:\\/\\/[^\\s"'<>]+/gi)]
-                    .map(m => decode(m[0]).replace(/&amp;.*$/, (x) => x))
+                  const urlsInItem = [...block.matchAll(/https?:\/\/[^\s"'<>]+/gi)]
+                    .map(m => decode(m[0]).replace(/&amp;/g, "&"))
                     .map(v => v.replace(/[),.;]+$/, ""));
-                  const mediaTags = [...block.matchAll(/<(?:media:content|media:player|enclosure)\\b[^>]*>/gi)].map(m => m[0]);
+                  const mediaTags = [...block.matchAll(/<(?:media:content|media:player|enclosure)\b[^>]*>/gi)].map(m => m[0]);
                   for (const tag of mediaTags) {
-                    const u = tag.match(/\\burl=[\"']([^\"']+)[\"']/i)?.[1] ||
-                              tag.match(/\\bhref=[\"']([^\"']+)[\"']/i)?.[1];
-                    const type = (tag.match(/\\btype=[\"']([^\"']+)[\"']/i)?.[1] || "").toLowerCase();
-                    const medium = (tag.match(/\\bmedium=[\"']([^\"']+)[\"']/i)?.[1] || "").toLowerCase();
+                    const u = tag.match(/\burl=["']([^"']+)["']/i)?.[1] ||
+                              tag.match(/\bhref=["']([^"']+)["']/i)?.[1];
+                    const type = (tag.match(/\btype=["']([^"']+)["']/i)?.[1] || "").toLowerCase();
+                    const medium = (tag.match(/\bmedium=["']([^"']+)["']/i)?.[1] || "").toLowerCase();
                     const candidate = u && safeUrl(decode(u));
                     if (candidate && (type.startsWith("video/") || medium === "video" || /media:player/i.test(tag))) {
                       mediaCandidates.push({ title, url: candidate });
@@ -78,12 +78,12 @@ jobs:
                   }
                   for (const raw of urlsInItem) {
                     const candidate = safeUrl(raw);
-                    if (candidate && /(?:youtube\\.com\\/(?:watch|shorts|embed)|youtu\\.be\\/|vimeo\\.com\\/|dailymotion\\.com\\/video)/i.test(candidate)) {
+                    if (candidate && /(?:youtube\.com\/(?:watch|shorts|embed)|youtu\.be\/|vimeo\.com\/|dailymotion\.com\/video)/i.test(candidate)) {
                       platformCandidates.push({ title, url: candidate });
                     }
                   }
                   const description = tagText(block, "description") + " " + tagText(block, "summary") + " " + tagText(block, "content:encoded");
-                  if (/\\b(video|vídeo|ver el vídeo|mira el video|en imágenes|reportaje audiovisual)\\b/i.test(title + " " + description)) {
+                  if (/\b(video|vídeo|ver el vídeo|mira el video|en imágenes|reportaje audiovisual)\b/i.test(title + " " + description)) {
                     likelyVideoStories.push({ title, url: safeUrl(tagText(block, "link")) || safeUrl(urlsInItem[0] || "") });
                   }
                 }
