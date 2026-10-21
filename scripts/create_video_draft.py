@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Create an ORIGINAL Mundo al Día vertical video draft from editor-verified Spanish text.
-Uses only locally generated graphics and a local Spanish TTS voice. No third-party video,
-photos, reposting, or publication side effects.
+Uses licensed context photos and a local Spanish neural TTS voice. No publication side effects.
 """
 import argparse
 import os
@@ -164,11 +163,9 @@ def draw_scene(path, title, body, index, total, end_card=False):
     d.rectangle((0, 0, W, 22), fill=CYAN)
     d.ellipse((760, -190, 1260, 310), outline=(35, 112, 165), width=5)
     d.ellipse((-220, 1400, 220, 1840), outline=(35, 112, 165), width=5)
-
     d.rounded_rectangle((66, 72, 440, 145), radius=28, fill=CYAN)
     d.text((92, 84), "MUNDO AL DÍA", font=font(34, True), fill=NAVY)
     d.text((72, 190), "NOTICIAS INTERNACIONALES", font=font(25, True), fill=MUTED)
-
     title_lines = wrap_by_pixels(d, title, font(52, True), 920)
     y = 270
     for line in title_lines[:5]:
@@ -176,7 +173,6 @@ def draw_scene(path, title, body, index, total, end_card=False):
         y += 69
     d.rounded_rectangle((72, y + 12, 220, y + 23), radius=5, fill=CYAN)
     y += 80
-
     if not end_card:
         draw_visual(im, d, body, index)
     body_font = font(35 if len(body) < 180 else 31)
@@ -186,7 +182,6 @@ def draw_scene(path, title, body, index, total, end_card=False):
     for line in body_lines[:max_lines]:
         d.text((76, y), line, font=body_font, fill=WHITE)
         y += line_h
-
     if end_card:
         d.rounded_rectangle((72, 1450, 1008, 1650), radius=30, fill=(5, 17, 37), outline=CYAN, width=3)
         d.text((110, 1492), "EL MUNDO, AL DÍA.", font=font(48, True), fill=WHITE)
@@ -203,7 +198,6 @@ def main():
     ap.add_argument("--summary", required=True)
     ap.add_argument("--narration", required=True)
     args = ap.parse_args()
-
     title = args.title.strip()
     summary = args.summary.strip()
     narration = args.narration.strip()
@@ -213,7 +207,6 @@ def main():
         raise SystemExit("El resumen debe tener entre 60 y 1200 caracteres.")
     if len(narration) < 100 or len(narration) > 2600:
         raise SystemExit("La narración debe tener entre 100 y 2600 caracteres.")
-
     OUT.mkdir(parents=True, exist_ok=True)
     global PHOTO_PATHS, PHOTO_CREDITS
     photo_specs = [
@@ -221,21 +214,16 @@ def main():
         ("Meeting with Foreign Minister of Iran Abbas Araghchi", "foto_reunion_diplomatica.jpg"),
         ("US Navy ships transit Strait of Hormuz", "foto_estrecho_hormuz.jpg"),
     ]
-    PHOTO_CREDITS = [
-        download_verified_commons_photo(OUT, query, filename)
-        for query, filename in photo_specs
-    ]
+    PHOTO_CREDITS = [download_verified_commons_photo(OUT, query, filename) for query, filename in photo_specs]
     PHOTO_PATHS = [item["path"] for item in PHOTO_CREDITS]
     save_photo_credits(OUT, PHOTO_CREDITS)
-    # Microsoft Edge neural TTS produces a more natural Spanish voice than espeak.
-    # This draft generator uses a neural Spanish voice, without requiring a paid API key.
     audio = OUT / "narracion_es.mp3"
+    voice = os.environ.get("MUNDO_AL_DIA_TTS_VOICE", "es-US-AlonsoNeural")
+    rate = os.environ.get("MUNDO_AL_DIA_TTS_RATE", "-8%")
+    # A second neural voice is tested on an isolated draft; this workflow never publishes.
     run([
-        "edge-tts",
-        "--voice", "es-MX-JorgeNeural",
-        "--rate=-5%",
-        "--text", narration,
-        "--write-media", str(audio),
+        "edge-tts", "--voice", voice, f"--rate={rate}", "--pitch=-2Hz",
+        "--text", narration, "--write-media", str(audio),
     ])
     probe = subprocess.check_output([
         "ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -249,37 +237,32 @@ def main():
         p = OUT / f"escena_{i+1:02d}.png"
         draw_scene(p, title, body, i + 1, len(scene_bodies), end_card=(i == len(scene_bodies) - 1))
         scene_paths.append(p)
-
-    # Distribute screen time over the narration; end card gets a short fixed beat.
     main_duration = max(1.0, audio_duration / (len(scene_paths) - 1))
     durations = [main_duration] * (len(scene_paths) - 1) + [2.0]
     concat = OUT / "escenas.txt"
     with concat.open("w", encoding="utf-8") as f:
         for p, dur in zip(scene_paths, durations):
-            f.write(f"file '{p.resolve()}'\n")
-            f.write(f"duration {dur:.3f}\n")
-        f.write(f"file '{scene_paths[-1].resolve()}'\n")
-
+            f.write(f"file '{p.resolve()}'\\n")
+            f.write(f"duration {dur:.3f}\\n")
+        f.write(f"file '{scene_paths[-1].resolve()}'\\n")
     video = OUT / "mundo-al-dia-video-original.mp4"
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "concat", "-safe", "0", "-i", str(concat),
-        "-i", str(audio),
-        "-vf", "fps=30,format=yuv420p",
-        "-af", "apad=pad_dur=2",
+        "-f", "concat", "-safe", "0", "-i", str(concat), "-i", str(audio),
+        "-vf", "fps=30,format=yuv420p", "-af", "apad=pad_dur=2",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-        "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart",
-        str(video)
+        "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", str(video)
     ])
     (OUT / "README.txt").write_text(
-        "Borrador original de Mundo al Día.\n"
-        "Tres fotografías reales de contexto con fuentes/licencias registradas y voz neural en español.\n"
-        "Revisar FUENTE_Y_LICENCIA_FOTO.txt y confirmar pertinencia antes de publicar.\n"
-        "Este archivo NO se publicó en el sitio, Facebook ni Instagram.\n"
-        "Revisión editorial humana requerida antes de cualquier publicación.\n",
+        "Borrador original de Mundo al Día.\\n"
+        f"Voz neural usada: {voice}; velocidad: {rate}; tono: -2 Hz.\\n"
+        "Revisar FUENTE_Y_LICENCIA_FOTO.txt y confirmar pertinencia antes de publicar.\\n"
+        "Este archivo NO se publicó en el sitio, Facebook ni Instagram.\\n"
+        "Revisión editorial humana requerida antes de cualquier publicación.\\n",
         encoding="utf-8"
     )
     print(f"VIDEO_GENERADO={video}")
+    print(f"VOZ_USADA={voice}")
     print(f"DURACION_NARRACION_SEGUNDOS={audio_duration:.1f}")
     print("PUBLICADO=NO")
 
