@@ -26,11 +26,11 @@ PHOTO_PATH = None
 PHOTO_CREDIT = None
 
 
-def download_verified_commons_photo(out_dir):
+def download_verified_commons_photo(out_dir, search_query):
     """Download a Commons photo only after reading its file-page license metadata."""
     api = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode({
         "action": "query", "format": "json", "generator": "search",
-        "gsrsearch": "file:Earth from space globe planet", "gsrnamespace": 6,
+        "gsrsearch": "file:" + " ".join(search_query.split()[:8]), "gsrnamespace": 6,
         "gsrlimit": 12, "prop": "imageinfo", "iiprop": "url|extmetadata",
         "iiurlwidth": 1200,
     })
@@ -118,58 +118,19 @@ def split_narration(text, parts=3):
 
 
 def draw_visual(im, d, body, index):
-    """Draw a prominent original illustration so each scene has visible imagery."""
-    lower = body.lower()
-    x0, y0, x1, y1 = 545, 625, 1008, 1460
-    d.rounded_rectangle((x0, y0, x1, y1), radius=34, fill=(5, 17, 37), outline=CYAN, width=4)
-    cx, cy = (x0 + x1) // 2, y0 + 255
-    # A large, original editorial illustration, drawn locally (no external media).
-    if any(k in lower for k in ("alamodome", "estadio", "fútbol", "caída", "accidente", "militar")):
-        # Stadium bowl, field, and overhead lights.
-        d.ellipse((x0 + 34, y0 + 105, x1 - 34, y0 + 470), fill=(18, 74, 130), outline=CYAN, width=5)
-        d.ellipse((x0 + 80, y0 + 170, x1 - 80, y0 + 405), fill=(7, 40, 75), outline=WHITE, width=4)
-        d.polygon([(x0 + 90, y0 + 290), (x1 - 90, y0 + 290), (x1 - 125, y0 + 390), (x0 + 125, y0 + 390)], fill=(20, 112, 83))
-        for xx in range(x0 + 120, x1 - 80, 58):
-            d.line((xx, y0 + 315, xx, y0 + 375), fill=(190, 235, 214), width=3)
-        for xx in (x0 + 110, x1 - 110):
-            d.line((xx, y0 + 60, xx - 20, y0 + 120), fill=CYAN, width=7)
-            d.ellipse((xx - 36, y0 + 35, xx + 12, y0 + 78), fill=WHITE)
-        d.text((x0 + 42, y0 + 520), "ESCENA ILUSTRADA", font=font(25, True), fill=CYAN)
-        d.text((x0 + 42, y0 + 570), "Contexto visual", font=font(28, True), fill=WHITE)
-    elif any(k in lower for k in ("protest", "manifest", "marchas", "huelga")):
-        d.rectangle((x0 + 35, y0 + 120, x1 - 35, y0 + 470), fill=(10, 48, 86), outline=CYAN, width=3)
-        for j, xx in enumerate((x0 + 115, x0 + 230, x0 + 345)):
-            d.ellipse((xx - 32, y0 + 205, xx + 32, y0 + 270), fill=(248, 190 - j * 15, 120 + j * 20))
-            d.line((xx, y0 + 270, xx, y0 + 395), fill=WHITE, width=18)
-            d.line((xx, y0 + 310, xx - 38, y0 + 350), fill=WHITE, width=10)
-            d.line((xx, y0 + 310, xx + 38, y0 + 350), fill=WHITE, width=10)
-            d.rectangle((xx - 48, y0 + 110, xx + 48, y0 + 180), fill=CYAN)
-            d.text((xx - 34, y0 + 130), "!", font=font(40, True), fill=NAVY)
-        d.text((x0 + 42, y0 + 520), "SOCIEDAD", font=font(25, True), fill=CYAN)
-        d.text((x0 + 42, y0 + 570), "Personas y actualidad", font=font(26, True), fill=WHITE)
-    else:
-        # Use a real photo only after checking its Commons license metadata.
-        r = 175
-        if PHOTO_PATH and Path(PHOTO_PATH).exists():
-            photo = Image.open(PHOTO_PATH).convert("RGB")
-            side = r * 2
-            scale = max(side / photo.width, side / photo.height)
-            photo = photo.resize((int(photo.width * scale), int(photo.height * scale)))
-            left = (photo.width - side) // 2
-            top = (photo.height - side) // 2
-            photo = photo.crop((left, top, left + side, top + side))
-            mask = Image.new("L", (side, side), 0)
-            ImageDraw.Draw(mask).ellipse((0, 0, side - 1, side - 1), fill=255)
-            # Paste the cropped real photo into the scene, clipped to a circular globe.
-            im.paste(photo, (cx - r, cy - r), mask)
-            d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=CYAN, width=7)
-        else:
-            d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(13, 92, 145), outline=CYAN, width=6)
-        d.text((x0 + 42, y0 + 520), "FOTO REAL · LICENCIA REGISTRADA", font=font(22, True), fill=CYAN)
-        d.text((x0 + 42, y0 + 570), "Visual de contexto", font=font(28, True), fill=WHITE)
-    # Consistent scene marker makes it clear this is an editorial graphic, not documentary footage.
-    d.rounded_rectangle((x0 + 28, y1 - 62, x1 - 28, y1 - 20), radius=14, fill=BLUE)
-    d.text((x0 + 48, y1 - 56), f"GRÁFICO ORIGINAL · {index:02d}", font=font(20, True), fill=WHITE)
+    """Place a real, licensed context photo in a restrained rectangular news frame."""
+    x0, y0, x1, y1 = 545, 695, 1008, 1255
+    if not PHOTO_PATH or not Path(PHOTO_PATH).exists():
+        raise RuntimeError("No hay foto con licencia revisable; no se genera un vídeo con imágenes ficticias.")
+    photo = Image.open(PHOTO_PATH).convert("RGB")
+    tw, th = x1 - x0, y1 - y0
+    scale = max(tw / photo.width, th / photo.height)
+    photo = photo.resize((int(photo.width * scale), int(photo.height * scale)), Image.Resampling.LANCZOS)
+    left = (photo.width - tw) // 2
+    top = (photo.height - th) // 2
+    im.paste(photo.crop((left, top, left + tw, top + th)), (x0, y0))
+    d.rectangle((x0, y0, x1, y1), outline=WHITE, width=2)
+    d.text((x0 + 8, y1 + 12), "FOTO DE CONTEXTO · VER FUENTE Y LICENCIA", font=font(17, True), fill=MUTED)
 
 
 def draw_scene(path, title, body, index, total, end_card=False):
@@ -236,7 +197,7 @@ def main():
 
     OUT.mkdir(parents=True, exist_ok=True)
     global PHOTO_PATH
-    PHOTO_PATH = download_verified_commons_photo(OUT)
+    PHOTO_PATH = download_verified_commons_photo(OUT, title + " " + summary)
     # Microsoft Edge neural TTS produces a more natural Spanish voice than espeak.
     # This draft generator uses a neural Spanish voice, without requiring a paid API key.
     audio = OUT / "narracion_es.mp3"
@@ -283,8 +244,8 @@ def main():
     ])
     (OUT / "README.txt").write_text(
         "Borrador original de Mundo al Día.\n"
-        "Visuales generados localmente y narración sintética en español.\n"
-        "No se usaron vídeos ni fotos de medios externos.\n"
+        "Fotografía de contexto con fuente/licencia registrada y voz neural en español.\n"
+        "Revisar FUENTE_Y_LICENCIA_FOTO.txt y confirmar pertinencia antes de publicar.\n"
         "Este archivo NO se publicó en el sitio, Facebook ni Instagram.\n"
         "Revisión editorial humana requerida antes de cualquier publicación.\n",
         encoding="utf-8"
