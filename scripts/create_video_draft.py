@@ -247,9 +247,11 @@ def main():
         ("Abbas Araghchi", "foto_reunion_diplomatica.jpg",
          ["abbas araghchi", "araghchi"],
          ["document", "screenshot", "webpage", "computer screen", "logo", "flag only", "cartoon", "illustration"]),
-        ("oil tanker cargo ship Strait of Hormuz shipping", "foto_estrecho_hormuz.jpg",
-         ["oil tanker", "oil tanker ship", "cargo ship strait of hormuz", "tanker strait of hormuz"],
-         ["document", "screenshot", "webpage", "computer screen", "diagram", "map", "model ship", "toy ship"]),
+        # Commons search is inconsistent for long location-specific phrases; search a
+        # broad vessel term, then require "tanker" in the actual file title.
+        ("oil tanker", "foto_estrecho_hormuz.jpg",
+         ["tanker"],
+         ["document", "screenshot", "webpage", "computer screen", "diagram", "map", "model ship", "toy ship", "oil platform", "gas station"]),
     ]
     PHOTO_CREDITS = [
         download_verified_commons_photo(OUT, query, filename, required_any, forbidden_any)
