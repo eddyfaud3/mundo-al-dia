@@ -286,6 +286,10 @@ jobs:
             }
             core.info("Deduplicación: " + confirmedRaw.length + " candidatos confirmados; " + duplicateStories.length + " duplicados excluidos.");
             for (const d of duplicateStories) core.info("DUPLICADO EXCLUIDO | " + d.title + " | " + d.url + " | duplicado de " + d.duplicateOf);
+            // Prioriza los candidatos distintos más recientes; máximo dos por ejecución.
+            // Esto solo crea una lista para revisión: no aprueba derechos ni publica contenido.
+            confirmed.sort((a, b) => (b.dateMs || 0) - (a.dateMs || 0));
+            const selected = confirmed.slice(0, 2);
             const review = decision.filter(s => s.status === "NECESITA VERIFICACIÓN");
             const rejected = decision.filter(s => s.status === "RECHAZADO");
             core.summary.addHeading("Mundo al Día — verificación de vídeos (DRY RUN)");
@@ -311,13 +315,28 @@ jobs:
                 ])
               ]);
             };
-            renderTable(confirmed,"1. CONFIRMADOS POR FUENTE EDITORIAL — revisión humana obligatoria");
-            renderTable(review,"2. NECESITAN VERIFICACIÓN");
-            renderTable(rejected,"3. RECHAZADOS POR LOS FILTROS DE ESTA PRUEBA");
+            core.summary.addHeading("1. DOS CANDIDATOS PRIORIZADOS — no publicados",2);
+            core.summary.addRaw("Se eligen como máximo dos noticias distintas por ejecución, priorizando las más recientes. Antes de publicar, una persona debe abrir el vídeo, confirmar que corresponde al hecho, revisar contexto y fecha, comprobar licencia/permisos o usar el enlace/embed oficial del medio. Si no hay dos candidatos válidos, el sistema no rellena los espacios con noticias débiles.\n\n");
+            if (!selected.length) {
+              core.summary.addRaw("No hay candidatos que superen todos los filtros; no se recomienda publicar ningún vídeo.\n\n");
+            } else {
+              core.summary.addTable([
+                [{data:"Prioridad",header:true},{data:"Titular",header:true},{data:"Fuente",header:true},{data:"Fecha",header:true},{data:"Artículo fuente",header:true},{data:"Vídeo detectado",header:true},{data:"Revisión obligatoria",header:true}],
+                ...selected.map((s,i) => [
+                  String(i+1), s.title, s.source, s.published || "fecha ausente",
+                  s.url || "sin URL",
+                  s.videos.map(v => v.url + " (" + v.evidence + ")").join(" ; "),
+                  "Confirmar vídeo y derechos; si no se confirma, no publicar"
+                ])
+              ]);
+            }
+            renderTable(confirmed,"2. TODOS LOS CANDIDATOS CONFIRMADOS POR FUENTE EDITORIAL");
+            renderTable(review,"3. NECESITAN VERIFICACIÓN");
+            renderTable(rejected,"4. RECHAZADOS POR LOS FILTROS DE ESTA PRUEBA");
             core.summary.addRaw("\nCobertura: se indexan las entradas RSS devueltas por las fuentes, pero solo se abren como máximo 8 páginas por fuente en este ensayo. Las fuentes aprobadas (DW Español, BBC Mundo y France 24 Español) se consideran fuentes editoriales principales: no se exige que otra fuente repita la noticia. Los filtros aún comprueban accesibilidad de página, fecha, coincidencia del título y evidencia de un vídeo específico. “Rechazado” significa que el candidato no superó los filtros técnicos de esta prueba, no que la noticia sea falsa. Ninguna decisión autoriza publicación automática.\n");
             await core.summary.write();
-            for (const s of confirmed) {
-              core.info("CANDIDATO CONFIRMADO | " + s.source + " | " + s.published + " | " + s.title + " | ARTÍCULO: " + s.url + " | VÍDEO: " + s.videos.map(v => v.url).join(" ; "));
+            for (const [i, s] of selected.entries()) {
+              core.info("SELECCIÓN PARA REVISIÓN #" + (i+1) + " | " + s.source + " | " + s.published + " | " + s.title + " | ARTÍCULO: " + s.url + " | VÍDEO: " + s.videos.map(v => v.url).join(" ; ") + " | DERECHOS: revisión humana pendiente");
             }
-            core.info("Dry run completado: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas por fuente editorial; " + review.length + " necesitan verificación; " + rejected.length + " rechazadas por filtros. No se publicó contenido.");
+            core.info("Dry run completado: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas por fuente editorial; " + selected.length + " priorizadas para revisión humana; " + review.length + " necesitan verificación; " + rejected.length + " rechazadas por filtros. No se publicó contenido.");
             if (sourceResults.every(s => !s.ok)) core.setFailed("Ninguna fuente RSS respondió correctamente.");
