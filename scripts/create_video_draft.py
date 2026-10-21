@@ -405,7 +405,7 @@ def main():
             "title": title,
             "caption": args.summary.strip(),
             "source_url": args.source_url,
-        }, ensure_ascii=False, indent=2) + "\\n",
+        }, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8"
     )
     (OUT / "README.txt").write_text(
