@@ -169,6 +169,7 @@ jobs:
               "video_url": os.environ["VIDEO_URL"],
               "title": metadata["title"],
               "caption": metadata.get("caption", metadata["title"]),
+              "source_url": metadata.get("source_url", ""),
               "run_id": os.environ.get("GITHUB_RUN_ID", "manual"),
           }
           request = urllib.request.Request(
