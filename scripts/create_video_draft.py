@@ -295,7 +295,7 @@ def main():
     )
     print(f"VIDEO_GENERADO={video}")
     print(f"VOZ_USADA={voice}")
-    print(f"DURACION_NARRACION_SEGUNDOS={audio_duration:.1f}")
+    print(f"DURACION_NARRACION_SEGUNDOS={sum(durations):.1f}")
     print("PUBLICADO=NO")
 
 
