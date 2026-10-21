@@ -48,6 +48,18 @@ jobs:
                 return approvedHost || /\.(mp4|m3u8|webm|mov)$/i.test(u.pathname);
               } catch { return false; }
             };
+            // Algunos medios usan un reproductor alojado en su propio dominio, no una URL de YouTube/MP4.
+            // Solo aceptamos rutas que identifiquen explícitamente un player, embed o vídeo.
+            const isFirstPartyPlayerUrl = raw => {
+              try {
+                const u = new URL(raw);
+                const h = u.hostname.toLowerCase();
+                const trustedPublisher = h === "dw.com" || h.endsWith(".dw.com") ||
+                  h === "bbc.com" || h.endsWith(".bbc.com") || h === "bbc.co.uk" || h.endsWith(".bbc.co.uk") ||
+                  h === "france24.com" || h.endsWith(".france24.com");
+                return trustedPublisher && /(?:embed|player|video|videos|watch|av-embed|media-player|mediathek|playback)/i.test(u.pathname);
+              } catch { return false; }
+            };
             const stopWords = new Set(["para","como","desde","sobre","entre","tras","esta","este","estos","estas","unos","unas","donde","cuando","porque","tambien","segun","despues","durante","hasta","contra","ante","their","there","about","after","before","from","with","that","this","have","will","what","were","been","says","said","into","over","more","than","near","world","mundo","ultima","hora","video","vdeo"]);
             const cleanTokens = s => textOf(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length >= 4 && !stopWords.has(w));
             const similarity = (a,b) => {
@@ -78,7 +90,7 @@ jobs:
                 const xml = await fetchText(feed.url, 12000);
                 const blocks = [...xml.matchAll(/<(?:[\w.-]+:)?(?:item|entry)\b[^>]*>[\s\S]*?<\/(?:[\w.-]+:)?(?:item|entry)\s*>/gi)].map(m => m[0]);
                 const parsed = blocks.map(block => {
-                  const title = tag(block, "title") || "(sin título)";
+                  const title = tag(block, "title") || attr((block.match(/<(?:[\\w.-]+:)?title\\b[^>]*>/i) || [""])[0], "value") || "(sin título)";
                   const link = absolute(getLink(block), feed.url);
                   const published = tag(block, "pubDate") || tag(block, "published") || tag(block, "updated") || tag(block, "date");
                   const dateMs = published ? Date.parse(published) : NaN;
@@ -109,24 +121,25 @@ jobs:
                 const titleTag = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
                 story.pageTitle = titleTag ? textOf(titleTag[1]) : "";
                 const evidence = [];
-                const addVideo = (raw, why) => {
+                const addVideo = (raw, why, allowPublisherPlayer = false) => {
                   const u = absolute(raw, story.url);
-                  if (u && isVideoUrl(u)) evidence.push({url:u, evidence:why});
+                  if (u && (isVideoUrl(u) || (allowPublisherPlayer && isFirstPartyPlayerUrl(u)))) evidence.push({url:u, evidence:why});
                 };
                 for (const m of html.matchAll(/<(iframe|video|source)\b[^>]*>/gi)) {
                   const el = m[0];
-                  addVideo(attr(el,"src") || attr(el,"data-src"), "<" + m[1].toLowerCase() + "> dentro de la página");
+                  const raw = attr(el,"src") || attr(el,"data-src") || attr(el,"data-video-url");
+                  addVideo(raw, "<" + m[1].toLowerCase() + "> dentro de la página", m[1].toLowerCase() === "iframe");
                 }
                 for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
                   const el = m[0];
                   const key = (attr(el,"property") + " " + attr(el,"name") + " " + attr(el,"itemprop")).toLowerCase();
-                  if (/video|content_url|embedurl/.test(key)) addVideo(attr(el,"content"), "metadato de vídeo: " + key.trim());
+                  if (/video|content_url|embedurl/.test(key)) addVideo(attr(el,"content"), "metadato de vídeo: " + key.trim(), true);
                 }
                 for (const m of html.matchAll(/<script\b[^>]*type\s*=\s*(['"])application\/ld\+json\1[^>]*>([\s\S]*?)<\/script>/gi)) {
                   const jsonText = decode(m[2]);
                   if (/VideoObject/i.test(jsonText)) {
                     const urls = jsonText.match(/https?:\\?\/\\?\/[^"'\\\s]+/g) || [];
-                    for (const raw of urls) addVideo(raw.replace(/\\\//g,"/"), "JSON-LD VideoObject");
+                    for (const raw of urls) addVideo(raw.replace(/\\\//g,"/"), "JSON-LD VideoObject", true);
                   }
                 }
                 story.videos = [...new Map([...evidence, ...story.rssVideos].map(v => [v.url,v])).values()].slice(0,8);
