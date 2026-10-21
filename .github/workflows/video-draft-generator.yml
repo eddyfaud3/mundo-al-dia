@@ -5,6 +5,10 @@ on:
     paths:
       - "scripts/create_video_draft.py"
       - ".github/workflows/video-draft-generator.yml"
+  pull_request:
+    paths:
+      - "scripts/create_video_draft.py"
+      - ".github/workflows/video-draft-generator.yml"
   workflow_dispatch:
     inputs:
       title:
