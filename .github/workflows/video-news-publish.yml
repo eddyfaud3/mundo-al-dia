@@ -15,6 +15,8 @@ permissions:
 
 jobs:
   dry-run:
+    # No publicar por el mero hecho de fusionar el archivo en main; solo horario o ejecución manual en main.
+    if: github.ref != 'refs/heads/main' || github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -367,6 +369,9 @@ jobs:
               };
             };
             for (const story of confirmed) {
+              let imageHost = "NO DETECTADA";
+              try { if (story.imageUrl) imageHost = new URL(story.imageUrl).hostname; } catch {}
+              core.info("IMAGEN DE FUENTE | " + story.title + " | " + imageHost);
               story.finalVerification = await verifyFinalVideo(story);
               core.info("VERIFICACIÓN FINAL | " + story.title + " | " + story.finalVerification.summary);
               for (const check of story.finalVerification.checks) {
