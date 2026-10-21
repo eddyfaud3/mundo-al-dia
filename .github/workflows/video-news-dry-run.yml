@@ -369,7 +369,7 @@ jobs:
             // Esto solo crea una lista para revisión: no aprueba derechos ni publica contenido.
             confirmed.sort((a, b) => (b.dateMs || 0) - (a.dateMs || 0));
             const selected = confirmed.filter(s => s.finalVerification && s.finalVerification.passed).slice(0, 2);
-const finalBlocked = confirmed.filter(s => !s.finalVerification || !s.finalVerification.passed);
+            const finalBlocked = confirmed.filter(s => !s.finalVerification || !s.finalVerification.passed);
             const review = decision.filter(s => s.status === "NECESITA VERIFICACIÓN");
             const rejected = decision.filter(s => s.status === "RECHAZADO");
             core.summary.addHeading("Mundo al Día — verificación de vídeos (DRY RUN)");
@@ -396,16 +396,16 @@ const finalBlocked = confirmed.filter(s => !s.finalVerification || !s.finalVerif
               ]);
             };
             core.summary.addHeading("1. VERIFICACIÓN FINAL AUTOMATIZADA",2);
-core.summary.addRaw("El filtro comprueba metadatos del vídeo (título y canal) cuando el proveedor los expone. Un PASS NO confirma por sí solo que cada detalle del vídeo sea correcto ni concede derechos de reutilización. Si el control falla, el candidato queda bloqueado. Ningún candidato se publica desde este workflow.\n\n");
-if (confirmed.length) {
-  core.summary.addTable([
-    [{data:"Titular de la noticia",header:true},{data:"Resultado final",header:true},{data:"Evidencia de vídeo",header:true}],
-    ...confirmed.map(s => [s.title, s.finalVerification ? s.finalVerification.summary : "BLOQUEADO: no se pudo verificar", (s.finalVerification?.checks || []).map(c => (c.ok ? "PASS" : "BLOCK") + ": " + c.reason + (c.videoTitle ? " | título: " + c.videoTitle : "") + (c.channel ? " | canal: " + c.channel : "")).join(" ; ")])
-  ]);
-} else {
-  core.summary.addRaw("No hay candidatos confirmados para ejecutar la verificación final.\n\n");
-}
-core.summary.addHeading("2. DOS CANDIDATOS PRIORIZADOS — no publicados",2);
+            core.summary.addRaw("El filtro comprueba metadatos del vídeo (título y canal) cuando el proveedor los expone. Un PASS NO confirma por sí solo que cada detalle del vídeo sea correcto ni concede derechos de reutilización. Si el control falla, el candidato queda bloqueado. Ningún candidato se publica desde este workflow.\n\n");
+            if (confirmed.length) {
+              core.summary.addTable([
+                [{data:"Titular de la noticia",header:true},{data:"Resultado final",header:true},{data:"Evidencia de vídeo",header:true}],
+                ...confirmed.map(s => [s.title, s.finalVerification ? s.finalVerification.summary : "BLOQUEADO: no se pudo verificar", (s.finalVerification?.checks || []).map(c => (c.ok ? "PASS" : "BLOCK") + ": " + c.reason + (c.videoTitle ? " | título: " + c.videoTitle : "") + (c.channel ? " | canal: " + c.channel : "")).join(" ; ")])
+              ]);
+            } else {
+              core.summary.addRaw("No hay candidatos confirmados para ejecutar la verificación final.\n\n");
+            }
+            core.summary.addHeading("2. DOS CANDIDATOS PRIORIZADOS — no publicados",2);
             core.summary.addRaw("Se eligen como máximo dos noticias distintas por ejecución, priorizando las más recientes. Antes de publicar, una persona debe abrir el vídeo, confirmar que corresponde al hecho, revisar contexto y fecha, comprobar licencia/permisos o usar el enlace/embed oficial del medio. Si no hay dos candidatos válidos, el sistema no rellena los espacios con noticias débiles.\n\n");
             if (!selected.length) {
               core.summary.addRaw("No hay candidatos que superen todos los filtros; no se recomienda publicar ningún vídeo.\n\n");
