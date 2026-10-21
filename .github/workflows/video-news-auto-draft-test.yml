@@ -1,0 +1,190 @@
+name: Video automático desde noticias — borrador de prueba (NO PUBLICA)
+
+on:
+  push:
+    branches:
+      - "test/video-news-workflow"
+    paths:
+      - ".github/workflows/video-news-auto-draft-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  create-unpublished-draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Descargar el código de la rama de prueba
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias de vídeo
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install pillow edge-tts CairoSVG
+          python -c "import cairosvg; print('CairoSVG OK:', cairosvg.__version__)"
+
+      - name: Seleccionar automáticamente una noticia reciente de una fuente reconocida
+        id: story
+        run: |
+          python - <<'PY'
+          import html, json, re, urllib.request, xml.etree.ElementTree as ET
+          from datetime import datetime, timezone, timedelta
+          from email.utils import parsedate_to_datetime
+          from urllib.parse import urlparse
+          from pathlib import Path
+
+          feeds = [
+              ("DW Español", "https://rss.dw.com/rdf/rss-sp-all"),
+              ("BBC Mundo", "https://feeds.bbci.co.uk/mundo/rss.xml"),
+              ("France 24 Español", "https://www.france24.com/es/rss"),
+          ]
+          headers = {"User-Agent": "MundoAlDia-DraftTest/1.0", "Accept": "application/rss+xml, application/xml, text/xml"}
+          cutoff = datetime.now(timezone.utc) - timedelta(hours=72)
+          candidates = []
+          errors = []
+          for source, feed_url in feeds:
+              try:
+                  req = urllib.request.Request(feed_url, headers=headers)
+                  with urllib.request.urlopen(req, timeout=15) as response:
+                      if response.status != 200:
+                          raise RuntimeError(f"RSS HTTP {response.status}")
+                      root = ET.fromstring(response.read(3_000_000))
+                  for item in root.findall(".//item"):
+                      title = html.unescape(" ".join((item.findtext("title") or "").split()))
+                      link = (item.findtext("link") or "").strip()
+                      description = item.findtext("description") or item.findtext("{http://purl.org/rss/1.0/modules/content/}encoded") or ""
+                      description = re.sub(r"<[^>]+>", " ", html.unescape(description))
+                      description = " ".join(description.split())
+                      pub = item.findtext("pubDate") or ""
+                      if not title or len(description) < 80 or urlparse(link).scheme != "https":
+                          continue
+                      try:
+                          published = parsedate_to_datetime(pub)
+                          if published.tzinfo is None:
+                              published = published.replace(tzinfo=timezone.utc)
+                          if published < cutoff:
+                              continue
+                      except Exception:
+                          continue
+                      candidates.append({"source": source, "title": title, "url": link, "summary": description[:1100], "published": published.isoformat()})
+              except Exception as e:
+                  errors.append(f"{source}: {e}")
+
+          candidates.sort(key=lambda x: x["published"], reverse=True)
+          if not candidates:
+              raise SystemExit("No se encontró una noticia con resumen suficiente y fecha verificable de las últimas 72 horas. No se generó vídeo. " + "; ".join(errors))
+          chosen = None
+          for story in candidates[:12]:
+              try:
+                  req = urllib.request.Request(story["url"], headers={"User-Agent": "Mozilla/5.0 (compatible; MundoAlDiaDraftTest/1.0)", "Accept": "text/html"})
+                  with urllib.request.urlopen(req, timeout=15) as response:
+                      content_type = (response.headers.get("Content-Type") or "").lower()
+                      final_url = response.geturl()
+                      page = response.read(1_000_000).decode("utf-8", errors="replace")
+                      if response.status != 200 or "html" not in content_type:
+                          continue
+                  page_title_match = re.search(r"<title[^>]*>(.*?)</title>", page, re.I | re.S)
+                  page_title = html.unescape(re.sub(r"<[^>]+>", " ", page_title_match.group(1))).strip() if page_title_match else ""
+                  if len(page_title) < 8:
+                      continue
+                  # Require at least two meaningful title terms to appear on the actual article page.
+                  words = [w for w in re.findall(r"[a-záéíóúñü]{4,}", story["title"].lower())]
+                  page_lower = html.unescape(re.sub(r"<[^>]+>", " ", page[:250000])).lower()
+                  overlap = sum(1 for w in set(words) if w in page_lower)
+                  if overlap < 2:
+                      continue
+                  story["page_title"] = page_title[:300]
+                  story["final_url"] = final_url
+                  chosen = story
+                  break
+              except Exception:
+                  continue
+          if not chosen:
+              raise SystemExit("Los artículos recientes no superaron las comprobaciones básicas de página y título. No se generó vídeo.")
+          # Narration is a cautious, source-attributed draft based ONLY on the RSS summary.
+          # It is not independent fact-checking and must not be auto-published.
+          summary = chosen["summary"]
+          narration = (
+              "Última hora. " + chosen["title"] + ". "
+              "Según la información publicada por " + chosen["source"] + ", " + summary + " "
+              "Este es un borrador automático basado en el resumen de la fuente original. "
+              "Antes de publicarlo, hay que comprobar los datos, la fecha, el contexto y los derechos de las imágenes. "
+              "Mundo al Día. El mundo, al día."
+          )
+          result = {
+              "source": chosen["source"],
+              "title": chosen["title"],
+              "summary": summary,
+              "narration": narration,
+              "source_url": chosen["final_url"],
+              "published": chosen["published"],
+              "warning": "Borrador automático: corroboración independiente y derechos de imágenes NO verificados."
+          }
+          Path("story.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+          print("Noticia elegida:", chosen["title"])
+          print("Fuente:", chosen["source"])
+          print("URL:", chosen["final_url"])
+          print("Fecha RSS:", chosen["published"])
+          print("AVISO: se crea solo un borrador; no se publica en web ni redes.")
+          PY
+
+      - name: Crear vídeo vertical como borrador no publicado
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          story = json.loads(Path("story.json").read_text(encoding="utf-8"))
+          if len(story["summary"]) < 60 or len(story["narration"]) < 100:
+              raise SystemExit("Resumen o narración demasiado cortos; no se genera vídeo.")
+          subprocess.run([
+              "python", "scripts/create_video_draft.py",
+              "--title", story["title"],
+              "--summary", story["summary"],
+              "--narration", story["narration"],
+              "--source-url", story["source_url"],
+          ], check=True)
+          Path("video-draft-output/auto-draft-source.json").write_text(
+              json.dumps(story, ensure_ascii=False, indent=2), encoding="utf-8"
+          )
+          PY
+
+      - name: Convertir a MP4 compatible con iPhone y Safari
+        run: |
+          set -euo pipefail
+          input="video-draft-output/mundo-al-dia-video-original.mp4"
+          test -s "$input"
+          ffmpeg -y -i "$input" -c:v libx264 -profile:v baseline -level 4.0 -pix_fmt yuv420p -r 30 -crf 23 -preset medium -c:a aac -b:a 128k -ar 44100 -ac 2 -movflags +faststart "video-draft-output/compatible.mp4"
+          mv "video-draft-output/compatible.mp4" "$input"
+          ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,pix_fmt -of json "$input"
+          ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,sample_rate,channels -of json "$input"
+
+      - name: Añadir informe de revisión editorial
+        if: always()
+        run: |
+          mkdir -p video-draft-output
+          cat > video-draft-output/REVISION_ANTES_DE_PUBLICAR.txt <<'EOF'
+          BORRADOR AUTOMÁTICO — NO PUBLICADO.
+          Este flujo no llama a Railway, Facebook ni Instagram.
+          La selección automática solo comprueba RSS reciente, página HTTP/HTML y coincidencia básica del título.
+          No es una verificación independiente de los hechos.
+          Comprobar cifras, nombres, fecha, contexto y corroboración en una segunda fuente fiable.
+          Las imágenes se extraen de la página original, pero sus derechos/licencia no se verifican automáticamente.
+          No publicar hasta que una persona confirme los hechos y los permisos de las imágenes.
+          EOF
+
+      - name: Guardar borrador y fuentes como artefacto
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mundo-al-dia-auto-video-draft-test
+          path: |
+            story.json
+            video-draft-output/
+          if-no-files-found: warn
+          retention-days: 7
