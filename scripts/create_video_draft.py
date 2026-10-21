@@ -8,6 +8,9 @@ import os
 import re
 import subprocess
 import textwrap
+import json
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -19,6 +22,52 @@ BLUE = (18, 74, 130)
 CYAN = (43, 198, 220)
 WHITE = (248, 250, 252)
 MUTED = (202, 218, 234)
+PHOTO_PATH = None
+PHOTO_CREDIT = None
+
+
+def download_verified_commons_photo(out_dir):
+    """Download a Commons photo only after reading its file-page license metadata."""
+    api = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode({
+        "action": "query", "format": "json", "generator": "search",
+        "gsrsearch": "file:Earth from space globe planet", "gsrnamespace": 6,
+        "gsrlimit": 12, "prop": "imageinfo", "iiprop": "url|extmetadata",
+        "iiurlwidth": 1200,
+    })
+    req = urllib.request.Request(api, headers={"User-Agent": "MundoAlDiaDraftGenerator/1.0 (editorial test)"})
+    with urllib.request.urlopen(req, timeout=25) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    pages = (data.get("query", {}).get("pages", {}) or {}).values()
+    accepted = {"public domain", "cc0", "cc by 4.0", "cc by 3.0", "cc by 2.0", "cc by 1.0"}
+    for page in pages:
+        info = (page.get("imageinfo") or [{}])[0]
+        meta = info.get("extmetadata", {})
+        license_name = (meta.get("LicenseShortName", {}).get("value", "") or "").strip()
+        license_lower = license_name.lower()
+        if not any(term in license_lower for term in accepted):
+            continue
+        image_url = info.get("thumburl") or info.get("url")
+        if not image_url:
+            continue
+        title = page.get("title", "Wikimedia Commons image")
+        artist = meta.get("Artist", {}).get("value", "Author not listed")
+        credit = re.sub(r"<[^>]+>", "", artist).strip()
+        page_url = "https://commons.wikimedia.org/wiki/" + urllib.parse.quote(title.replace(" ", "_"), safe="/:()")
+        out_path = out_dir / "foto_licencia_verificada.jpg"
+        request = urllib.request.Request(image_url, headers={"User-Agent": "MundoAlDiaDraftGenerator/1.0 (editorial test)"})
+        with urllib.request.urlopen(request, timeout=30) as response, out_path.open("wb") as target:
+            target.write(response.read())
+        # Store the source page and the license label so a reviewer can independently verify them.
+        (out_dir / "FUENTE_Y_LICENCIA_FOTO.txt").write_text(
+            "FOTO DE PRUEBA — no representa una noticia actual.\\n"
+            f"Archivo: {title}\\nFuente verificable: {page_url}\\n"
+            f"Licencia declarada en Wikimedia Commons: {license_name}\\n"
+            f"Autor/crédito indicado: {credit or 'No indicado'}\\n"
+            "Revisar la página original y sus condiciones antes de cualquier publicación.\\n",
+            encoding="utf-8",
+        )
+        return out_path
+    raise RuntimeError("No se encontró una foto de Wikimedia Commons con licencia pública/CC aceptada y metadatos legibles.")
 
 
 def run(args):
@@ -99,16 +148,26 @@ def draw_visual(d, body, index):
         d.text((x0 + 42, y0 + 520), "SOCIEDAD", font=font(25, True), fill=CYAN)
         d.text((x0 + 42, y0 + 570), "Personas y actualidad", font=font(26, True), fill=WHITE)
     else:
-        # Globe, longitude/latitude arcs and simple continent silhouettes.
+        # Use a real photo only after checking its Commons license metadata.
         r = 175
-        d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(13, 92, 145), outline=CYAN, width=6)
-        d.ellipse((cx - 95, cy - r, cx + 95, cy + r), outline=(125, 220, 235), width=4)
-        d.ellipse((cx - r, cy - 78, cx + r, cy + 78), outline=(125, 220, 235), width=4)
-        d.arc((cx - r, cy - 125, cx + r, cy + 125), 0, 360, fill=(125, 220, 235), width=3)
-        d.polygon([(cx - 110, cy - 85), (cx - 35, cy - 110), (cx + 5, cy - 50), (cx - 40, cy + 5), (cx - 90, cy - 5)], fill=(86, 196, 142))
-        d.polygon([(cx + 35, cy - 35), (cx + 112, cy - 15), (cx + 95, cy + 60), (cx + 50, cy + 115), (cx + 20, cy + 45)], fill=(86, 196, 142))
-        d.text((x0 + 42, y0 + 520), "MUNDO EN CONTEXTO", font=font(25, True), fill=CYAN)
-        d.text((x0 + 42, y0 + 570), "Información visual", font=font(28, True), fill=WHITE)
+        if PHOTO_PATH and Path(PHOTO_PATH).exists():
+            photo = Image.open(PHOTO_PATH).convert("RGB")
+            side = r * 2
+            scale = max(side / photo.width, side / photo.height)
+            photo = photo.resize((int(photo.width * scale), int(photo.height * scale)))
+            left = (photo.width - side) // 2
+            top = (photo.height - side) // 2
+            photo = photo.crop((left, top, left + side, top + side))
+            mask = Image.new("L", (side, side), 0)
+            ImageDraw.Draw(mask).ellipse((0, 0, side - 1, side - 1), fill=255)
+            im = photo
+            # Paste into the already-rendered scene via a circular alpha mask.
+            d._image.paste(im, (cx - r, cy - r), mask)
+            d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=CYAN, width=7)
+        else:
+            d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(13, 92, 145), outline=CYAN, width=6)
+        d.text((x0 + 42, y0 + 520), "FOTO REAL · LICENCIA REGISTRADA", font=font(22, True), fill=CYAN)
+        d.text((x0 + 42, y0 + 570), "Visual de contexto", font=font(28, True), fill=WHITE)
     # Consistent scene marker makes it clear this is an editorial graphic, not documentary footage.
     d.rounded_rectangle((x0 + 28, y1 - 62, x1 - 28, y1 - 20), radius=14, fill=BLUE)
     d.text((x0 + 48, y1 - 56), f"GRÁFICO ORIGINAL · {index:02d}", font=font(20, True), fill=WHITE)
@@ -123,6 +182,7 @@ def draw_scene(path, title, body, index, total, end_card=False):
         for x in range(W):
             px[x, y] = c
     d = ImageDraw.Draw(im)
+    d._image = im
     d.rectangle((0, 0, W, 22), fill=CYAN)
     d.ellipse((760, -190, 1260, 310), outline=(35, 112, 165), width=5)
     d.ellipse((-220, 1400, 220, 1840), outline=(35, 112, 165), width=5)
@@ -177,6 +237,8 @@ def main():
         raise SystemExit("La narración debe tener entre 100 y 2600 caracteres.")
 
     OUT.mkdir(parents=True, exist_ok=True)
+    global PHOTO_PATH
+    PHOTO_PATH = download_verified_commons_photo(OUT)
     # Microsoft Edge neural TTS produces a more natural Spanish voice than espeak.
     # This draft generator uses a neural Spanish voice, without requiring a paid API key.
     audio = OUT / "narracion_es.mp3"
