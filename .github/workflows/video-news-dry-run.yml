@@ -73,6 +73,12 @@ jobs:
               if (!res.ok) throw new Error("HTTP " + res.status);
               return await res.text();
             };
+            // Diagnóstico de página: conserva código HTTP, URL final y tipo de contenido.
+            const fetchPage = async (url, ms = 7000) => {
+              const res = await fetch(url, { headers, signal: AbortSignal.timeout(ms), redirect: "follow" });
+              const html = await res.text();
+              return { html, status: res.status, finalUrl: res.url, contentType: res.headers.get("content-type") || "" };
+            };
             const getLink = block => {
               const linkTag = block.match(/<(?:[\w.-]+:)?link\b[^>]*>/i);
               if (linkTag) {
@@ -115,9 +121,14 @@ jobs:
             }
             for (const story of inspectQueue) {
               try {
-                const html = await fetchText(story.url, 7000);
-                story.pageChecked = true;
-                story.pageStatus = "página abierta";
+                const page = await fetchPage(story.url, 7000);
+                const html = page.html;
+                story.httpStatus = page.status;
+                story.finalUrl = page.finalUrl;
+                story.contentType = page.contentType;
+                story.pageChecked = page.status >= 200 && page.status < 400 && /html|xml/i.test(page.contentType);
+                story.pageStatus = "HTTP " + page.status + "; " + (page.contentType || "tipo desconocido") + "; URL final: " + page.finalUrl;
+                if (!story.pageChecked) story.reason = "La respuesta no parece una página HTML/XML accesible para inspección.";
                 const titleTag = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
                 story.pageTitle = titleTag ? textOf(titleTag[1]) : "";
                 const evidence = [];
@@ -206,7 +217,7 @@ jobs:
                   s.title,
                   s.source,
                   s.published || "fecha ausente",
-                  (s.pageStatus || "") + (s.pageTitle ? " | título página: " + s.pageTitle.slice(0,180) : ""),
+                  (s.pageStatus || "") + (s.pageTitle ? " | título página: " + s.pageTitle.slice(0,180) : "") + (s.httpStatus ? " | HTTP " + s.httpStatus : "") + (s.finalUrl ? " | final " + s.finalUrl : ""),
                   s.url || "sin URL",
                   s.videos.length ? s.videos.map(v => v.url + " (" + v.evidence + ")").join(" ; ") : "ningún enlace específico confirmado",
                   (s.peerEvidence.length ? s.peerEvidence.map(p => p.source + ": " + p.title + " [" + p.url + "]").join(" ; ") : "") + (s.peerEvidence.length ? " | " : "") + s.reason
