@@ -469,67 +469,15 @@ jobs:
             renderTable(review,"3. NECESITAN VERIFICACIÓN");
             renderTable(rejected,"4. RECHAZADOS POR LOS FILTROS DE ESTA PRUEBA");
             core.summary.addRaw("\nCobertura: se indexan las entradas RSS devueltas por las fuentes, pero solo se abren como máximo 8 páginas por fuente en este ensayo. Las fuentes aprobadas (DW Español, BBC Mundo y France 24 Español) se consideran fuentes editoriales principales: no se exige que otra fuente repita la noticia. Los filtros aún comprueban accesibilidad de página, fecha, coincidencia del título y evidencia de un vídeo específico. “Rechazado” significa que el candidato no superó los filtros técnicos de esta prueba, no que la noticia sea falsa. Ninguna decisión autoriza publicación automática.\n");
-            // Publicación real protegida por un secreto separado. Si no está activado, el workflow
-            // solo genera el informe y nunca llama a Railway.
-            const autoPublishEnabled = process.env.AUTO_PUBLISH_ENABLED === "true";
-            const mediaRightsConfirmed = process.env.MEDIA_RIGHTS_CONFIRMED === "true";
-            const automationSecret = process.env.AUTOMATION_SECRET || "";
-            const siteUrl = process.env.SITE_URL || "";
-            const slugify = value => textOf(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 150).replace(/-+$/g, "");
-            let publishedCount = 0;
-            if (!autoPublishEnabled) {
-              core.info("PUBLICACIÓN DESACTIVADA: VIDEO_NEWS_AUTO_PUBLISH_ENABLED no es exactamente true. Solo informe; no se llamó a Railway.");
-              core.summary.addRaw("**Publicación automática:** desactivada por seguridad. Para activarla, configurar explícitamente el secreto `VIDEO_NEWS_AUTO_PUBLISH_ENABLED` con el valor `true`.\n\n");
-            } else if (!mediaRightsConfirmed) {
-              core.info("PUBLICACIÓN BLOQUEADA: falta VIDEO_NEWS_MEDIA_RIGHTS_CONFIRMED=true. La verificación técnica no demuestra permiso para reutilizar la imagen ni el vídeo; no se llamó a Railway.");
-              core.summary.addRaw("**Publicación bloqueada:** falta confirmar los derechos/permisos de uso de los medios. Configura `VIDEO_NEWS_MEDIA_RIGHTS_CONFIRMED=true` solo después de confirmar los permisos o limitar el contenido a enlaces/reproductores oficiales y una imagen con uso permitido.\n\n");
-            } else if (!automationSecret || !siteUrl) {
-              core.setFailed("La activación está habilitada, pero faltan MUNDO_AL_DIA_AUTOMATION_SECRET o SITE_URL.");
-            } else {
-              for (const story of selected) {
-                const verifiedVideo = story.finalVerification.checks.find(check => check.ok)?.url || "";
-                if (!verifiedVideo || !story.imageUrl || !story.imageUrl.startsWith("https://")) {
-                  core.warning("BLOQUEADO: falta vídeo con metadatos verificados o imagen HTTPS de la fuente: " + story.title);
-                  continue;
-                }
-                const slug = slugify(story.title);
-                if (!slug) continue;
-                const excerpt = (story.pageText || story.title).slice(0, 650);
-                const content = [
-                  story.title,
-                  "",
-                  (story.pageText || "").slice(0, 6500),
-                  "",
-                  "Fuente editorial: " + story.source,
-                  "Artículo original: " + story.url,
-                  "Vídeo original del medio: " + verifiedVideo,
-                  "",
-                  "Mundo al Día comparte el enlace al vídeo original; no descarga ni vuelve a subir el archivo de vídeo."
-                ].join("\n");
-                try {
-                  const response = await fetch(new URL("/api/automation/publish", siteUrl), {
-                    method: "POST",
-                    headers: { "Authorization": "Bearer " + automationSecret, "Content-Type": "application/json" },
-                    body: JSON.stringify({ title: story.title, slug, excerpt, content, category: "Internacional", image_url: story.imageUrl, video_url: verifiedVideo })
-                  });
-                  const result = await response.json().catch(() => ({}));
-                  if (response.status === 409) { core.info("DUPLICADO: ya existe " + slug + "; no se publicó otra vez."); continue; }
-                  if (!response.ok) { core.warning("No se pudo publicar " + story.title + ": " + (result.error || ("HTTP " + response.status))); continue; }
-                  publishedCount++;
-                  core.info("PUBLICADO EN EL SITIO: " + result.url + " | vídeo oficial: " + verifiedVideo);
-                  if (result.facebook?.published) core.info("Facebook: publicación confirmada.");
-                  else core.warning("Facebook no confirmó: " + (result.facebook?.reason || "sin detalles"));
-                  if (result.instagram?.published) core.info("Instagram: publicación confirmada.");
-                  else core.warning("Instagram no confirmó: " + (result.instagram?.reason || "sin detalles"));
-                  break; // máximo un artículo nuevo por ciclo: dos ciclos diarios = hasta dos al día
-                } catch (error) { core.warning("Error al publicar " + story.title + ": " + (error?.message || "error desconocido")); }
-              }
-              core.summary.addRaw("**Publicación automática:** activada. Publicaciones nuevas confirmadas en esta ejecución: " + publishedCount + ". Los vídeos se enlazan desde la fuente original; no se descargan ni se vuelven a subir. La imagen editorial se toma de los metadatos de la página fuente.\n\n");
-              core.info("PUBLICACIÓN TERMINADA: " + publishedCount + " artículo(s) nuevo(s) publicado(s); máximo un artículo nuevo por ciclo.");
+            // BLOQUEO DE SEGURIDAD: las fuentes detectadas son vídeos de medios externos,
+            // no vídeos originales producidos por Mundo al Día. Nunca publicarlos como propios.
+            // El pipeline solo inspecciona y prepara candidatos; no llama a Railway ni a Meta.
+            const publishedCount = 0;
+            core.info("PUBLICACIÓN AUTOMÁTICA BLOQUEADA: solo se detectaron vídeos de fuentes externas; no se ha generado ni verificado un vídeo original de Mundo al Día.");
+            core.summary.addRaw("**Publicación automática de vídeo:** BLOQUEADA. Esta prueba encontró vídeos alojados por medios externos (DW, BBC Mundo o France 24), no vídeos originales producidos por Mundo al Día. No se publica en el sitio, Facebook ni Instagram. Para reactivar publicación, primero debe implementarse y probarse un flujo que cree vídeos originales en español con material autorizado y marca Mundo al Día.\n\n");
+            for (const [i, s] of selected.entries()) {
+              core.info("SOLO REVISIÓN — NO PUBLICADO #" + (i+1) + " | " + s.source + " | " + s.published + " | " + s.title + " | ARTÍCULO: " + s.url + " | VÍDEO EXTERNO: " + s.finalVerification.checks.filter(c => c.ok).map(c => c.url).join(" ; ") + " | DERECHOS: revisión humana pendiente");
             }
             await core.summary.write();
-            for (const [i, s] of selected.entries()) {
-              core.info("SELECCIÓN PARA REVISIÓN #" + (i+1) + " | " + s.source + " | " + s.published + " | " + s.title + " | ARTÍCULO: " + s.url + " | VÍDEO: " + s.finalVerification.checks.filter(c => c.ok).map(c => c.url).join(" ; ") + " | DERECHOS: revisión humana pendiente");
-            }
-            core.info("Dry run completado: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas por fuente editorial; " + selected.length + " superaron metadatos y se priorizan para revisión humana; " + finalBlocked.length + " bloqueadas por la verificación final; " + review.length + " necesitan verificación; " + rejected.length + " rechazadas por filtros. No se publicó contenido.");
+            core.info("DRY RUN FINALIZADO: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas por fuente editorial; " + selected.length + " candidatos para revisión; " + finalBlocked.length + " bloqueados por verificación final; " + review.length + " necesitan verificación; " + rejected.length + " rechazados. PUBLICACIONES REALIZADAS POR ESTE WORKFLOW: 0.");
             if (sourceResults.every(s => !s.ok)) core.setFailed("Ninguna fuente RSS respondió correctamente.");
