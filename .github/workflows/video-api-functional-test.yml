@@ -1,0 +1,113 @@
+name: Functional test video API (dry run only)
+
+on:
+  push:
+    branches:
+      - test/video-news-workflow
+    paths:
+      - "app/api/automation/publish-video/route.js"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/video-api-functional-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  functional-dry-run:
+    if: github.ref == 'refs/heads/test/video-news-workflow'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUTOMATION_PUBLISH_SECRET: test-only-secret-not-a-production-credential
+      VIDEO_AUTO_PUBLISH_ENABLED: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout isolated test branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Start local test server
+        run: |
+          npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/mundo-al-dia-next.log 2>&1 &
+          echo $! > /tmp/mundo-al-dia-next.pid
+
+      - name: Verify authentication, validation, and dry-run behavior
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+
+          const base = "http://127.0.0.1:3000/api/automation/publish-video";
+          let ready = false;
+          for (let i = 0; i < 60; i++) {
+            try {
+              const response = await fetch(base, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ title: "Test", caption: "Test", video_url: "https://example.com/test.mp4" })
+              });
+              if (response.status === 401) {
+                ready = true;
+                break;
+              }
+            } catch {}
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          assert.equal(ready, true, "Local Next.js server did not become ready or unauthenticated request was not rejected");
+
+          const unauth = await fetch(base, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ title: "Test", caption: "Test", video_url: "https://example.com/test.mp4" })
+          });
+          assert.equal(unauth.status, 401, "Requests without credentials must return 401");
+
+          const valid = await fetch(base, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "authorization": "Bearer test-only-secret-not-a-production-credential"
+            },
+            body: JSON.stringify({
+              title: "Prueba controlada de vídeo",
+              caption: "Prueba de API; no publicar.",
+              video_url: "https://example.com/test.mp4"
+            })
+          });
+          assert.equal(valid.status, 200, "Valid test request should be accepted in dry-run mode");
+          const result = await valid.json();
+          assert.equal(result.ok, true);
+          assert.equal(result.dry_run, true, "Dry-run must remain enabled");
+          assert.equal(result.title, "Prueba controlada de vídeo");
+          assert.match(result.message, /no se guardó ninguna noticia ni se publicó/i);
+
+          const invalidUrl = await fetch(base, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "authorization": "Bearer test-only-secret-not-a-production-credential"
+            },
+            body: JSON.stringify({
+              title: "Prueba URL",
+              caption: "No publicar.",
+              video_url: "http://example.com/test.mp4"
+            })
+          });
+          assert.equal(invalidUrl.status, 400, "Non-HTTPS video URLs must be rejected");
+
+          console.log("PASS: unauthenticated request rejected (401)");
+          console.log("PASS: valid request accepted without publishing (200, dry_run=true)");
+          console.log("PASS: non-HTTPS video URL rejected (400)");
+          NODE
