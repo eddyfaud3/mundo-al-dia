@@ -117,7 +117,7 @@ def split_narration(text, parts=3):
     return chunks
 
 
-def draw_visual(d, body, index):
+def draw_visual(im, d, body, index):
     """Draw a prominent original illustration so each scene has visible imagery."""
     lower = body.lower()
     x0, y0, x1, y1 = 545, 625, 1008, 1460
@@ -162,7 +162,8 @@ def draw_visual(d, body, index):
             ImageDraw.Draw(mask).ellipse((0, 0, side - 1, side - 1), fill=255)
             im = photo
             # Paste into the already-rendered scene via a circular alpha mask.
-            d._image.paste(im, (cx - r, cy - r), mask)
+            scene_im = im
+            scene_im.paste(photo, (cx - r, cy - r), mask)
             d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=CYAN, width=7)
         else:
             d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(13, 92, 145), outline=CYAN, width=6)
@@ -182,7 +183,6 @@ def draw_scene(path, title, body, index, total, end_card=False):
         for x in range(W):
             px[x, y] = c
     d = ImageDraw.Draw(im)
-    d._image = im
     d.rectangle((0, 0, W, 22), fill=CYAN)
     d.ellipse((760, -190, 1260, 310), outline=(35, 112, 165), width=5)
     d.ellipse((-220, 1400, 220, 1840), outline=(35, 112, 165), width=5)
@@ -200,7 +200,7 @@ def draw_scene(path, title, body, index, total, end_card=False):
     y += 80
 
     if not end_card:
-        draw_visual(d, body, index)
+        draw_visual(im, d, body, index)
     body_font = font(35 if len(body) < 180 else 31)
     body_lines = wrap_by_pixels(d, body, body_font, 430)
     line_h = 47 if body_font.size >= 35 else 42
