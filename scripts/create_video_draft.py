@@ -22,17 +22,17 @@ BLUE = (18, 74, 130)
 CYAN = (43, 198, 220)
 WHITE = (248, 250, 252)
 MUTED = (202, 218, 234)
-PHOTO_PATH = None
-PHOTO_CREDIT = None
+PHOTO_PATHS = []
+PHOTO_CREDITS = []
 
 
-def download_verified_commons_photo(out_dir, search_query):
-    """Download a Commons photo only after reading its file-page license metadata."""
+def download_verified_commons_photo(out_dir, search_query, filename):
+    """Download a real Commons photo after checking its file-page license metadata."""
     api = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode({
         "action": "query", "format": "json", "generator": "search",
-        "gsrsearch": "file:" + " ".join(search_query.split()[:8]), "gsrnamespace": 6,
-        "gsrlimit": 12, "prop": "imageinfo", "iiprop": "url|extmetadata",
-        "iiurlwidth": 1200,
+        "gsrsearch": "file:" + search_query, "gsrnamespace": 6,
+        "gsrlimit": 15, "prop": "imageinfo", "iiprop": "url|extmetadata",
+        "iiurlwidth": 1400,
     })
     req = urllib.request.Request(api, headers={"User-Agent": "MundoAlDiaDraftGenerator/1.0 (editorial test)"})
     with urllib.request.urlopen(req, timeout=25) as response:
@@ -53,21 +53,37 @@ def download_verified_commons_photo(out_dir, search_query):
         artist = meta.get("Artist", {}).get("value", "Author not listed")
         credit = re.sub(r"<[^>]+>", "", artist).strip()
         page_url = "https://commons.wikimedia.org/wiki/" + urllib.parse.quote(title.replace(" ", "_"), safe="/:()")
-        out_path = out_dir / "foto_licencia_verificada.jpg"
+        out_path = out_dir / filename
         request = urllib.request.Request(image_url, headers={"User-Agent": "MundoAlDiaDraftGenerator/1.0 (editorial test)"})
         with urllib.request.urlopen(request, timeout=30) as response, out_path.open("wb") as target:
             target.write(response.read())
-        # Store the source page and the license label so a reviewer can independently verify them.
-        (out_dir / "FUENTE_Y_LICENCIA_FOTO.txt").write_text(
-            "FOTO DE PRUEBA — no representa una noticia actual.\n"
-            f"Archivo: {title}\nFuente verificable: {page_url}\n"
-            f"Licencia declarada en Wikimedia Commons: {license_name}\n"
-            f"Autor/crédito indicado: {credit or 'No indicado'}\n"
-            "Revisar la página original y sus condiciones antes de cualquier publicación.\n",
-            encoding="utf-8",
-        )
-        return out_path
-    raise RuntimeError("No se encontró una foto de Wikimedia Commons con licencia pública/CC aceptada y metadatos legibles.")
+        return {
+            "path": out_path,
+            "file": title,
+            "source": page_url,
+            "license": license_name,
+            "credit": credit or "No indicado",
+            "search": search_query,
+        }
+    raise RuntimeError(f"No se encontró una foto pertinente con licencia aceptada para: {search_query}")
+
+
+def save_photo_credits(out_dir, credits):
+    lines = [
+        "FUENTES Y LICENCIAS DE FOTOGRAFÍAS — borrador no publicado.",
+        "Las imágenes son fotos reales de contexto; comprobar pertinencia visual antes de publicar.",
+        "",
+    ]
+    for i, item in enumerate(credits, 1):
+        lines.extend([
+            f"Escena {i}: {item['search']}",
+            f"Archivo: {item['file']}",
+            f"Fuente: {item['source']}",
+            f"Licencia declarada: {item['license']}",
+            f"Autor/crédito: {item['credit']}",
+            "",
+        ])
+    (out_dir / "FUENTE_Y_LICENCIA_FOTO.txt").write_text("\n".join(lines), encoding="utf-8")
 
 
 def run(args):
@@ -120,9 +136,12 @@ def split_narration(text, parts=3):
 def draw_visual(im, d, body, index):
     """Place a real, licensed context photo in a restrained rectangular news frame."""
     x0, y0, x1, y1 = 545, 695, 1008, 1255
-    if not PHOTO_PATH or not Path(PHOTO_PATH).exists():
-        raise RuntimeError("No hay foto con licencia revisable; no se genera un vídeo con imágenes ficticias.")
-    photo = Image.open(PHOTO_PATH).convert("RGB")
+    if not PHOTO_PATHS:
+        raise RuntimeError("No hay fotos con licencia revisable; no se genera un vídeo con imágenes ficticias.")
+    photo_path = PHOTO_PATHS[min(max(index - 1, 0), len(PHOTO_PATHS) - 1)]
+    if not Path(photo_path).exists():
+        raise RuntimeError("Falta una foto descargada y verificada.")
+    photo = Image.open(photo_path).convert("RGB")
     tw, th = x1 - x0, y1 - y0
     scale = max(tw / photo.width, th / photo.height)
     photo = photo.resize((int(photo.width * scale), int(photo.height * scale)), Image.Resampling.LANCZOS)
@@ -196,8 +215,18 @@ def main():
         raise SystemExit("La narración debe tener entre 100 y 2600 caracteres.")
 
     OUT.mkdir(parents=True, exist_ok=True)
-    global PHOTO_PATH
-    PHOTO_PATH = download_verified_commons_photo(OUT, title + " " + summary)
+    global PHOTO_PATHS, PHOTO_CREDITS
+    photo_specs = [
+        ("White House exterior official US government", "foto_casa_blanca.jpg"),
+        ("Meeting with Foreign Minister of Iran Abbas Araghchi", "foto_reunion_diplomatica.jpg"),
+        ("US Navy ships transit Strait of Hormuz", "foto_estrecho_hormuz.jpg"),
+    ]
+    PHOTO_CREDITS = [
+        download_verified_commons_photo(OUT, query, filename)
+        for query, filename in photo_specs
+    ]
+    PHOTO_PATHS = [item["path"] for item in PHOTO_CREDITS]
+    save_photo_credits(OUT, PHOTO_CREDITS)
     # Microsoft Edge neural TTS produces a more natural Spanish voice than espeak.
     # This draft generator uses a neural Spanish voice, without requiring a paid API key.
     audio = OUT / "narracion_es.mp3"
@@ -244,7 +273,7 @@ def main():
     ])
     (OUT / "README.txt").write_text(
         "Borrador original de Mundo al Día.\n"
-        "Fotografía de contexto con fuente/licencia registrada y voz neural en español.\n"
+        "Tres fotografías reales de contexto con fuentes/licencias registradas y voz neural en español.\n"
         "Revisar FUENTE_Y_LICENCIA_FOTO.txt y confirmar pertinencia antes de publicar.\n"
         "Este archivo NO se publicó en el sitio, Facebook ni Instagram.\n"
         "Revisión editorial humana requerida antes de cualquier publicación.\n",
