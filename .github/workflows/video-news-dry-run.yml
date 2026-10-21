@@ -57,7 +57,28 @@ jobs:
                 const trustedPublisher = h === "dw.com" || h.endsWith(".dw.com") ||
                   h === "bbc.com" || h.endsWith(".bbc.com") || h === "bbc.co.uk" || h.endsWith(".bbc.co.uk") ||
                   h === "france24.com" || h.endsWith(".france24.com");
-                return trustedPublisher && /(?:embed|player|video|videos|watch|av-embed|media-player|mediathek|playback)/i.test(u.pathname);
+                const path = decodeURIComponent(u.pathname).toLowerCase();
+                if (!trustedPublisher) return false;
+                // A broad /video/ link is not enough: require a specific content/player route.
+                if (h.endsWith("france24.com")) return /^\/es\/video\/\d{8}-[^/]+$/.test(path);
+                if (h.endsWith("dw.com")) return /^\/es\/[^/]+\/video-\d+\.html$/.test(path) || /\/(embed|player|av-embed|media-player|playback)\//i.test(path);
+                return /\/(embed|player|av-embed|media-player|playback)\//i.test(path) || /^\/[^/]+\/video\/[^/]+$/i.test(path);
+              } catch { return false; }
+            };
+            const isRelevantVideoUrl = (raw, story) => {
+              try {
+                const u = new URL(raw);
+                if (isVideoUrl(raw)) return true;
+                if (!isFirstPartyPlayerUrl(raw)) return false;
+                const article = new URL(story.url);
+                const p = decodeURIComponent(u.pathname).toLowerCase();
+                const a = decodeURIComponent(article.pathname).toLowerCase();
+                // First-party player must be the story itself or have a strong title overlap.
+                if (u.hostname === article.hostname && (u.pathname === article.pathname || p.startsWith(a + "/"))) return true;
+                const titleWords = new Set(cleanTokens(story.title));
+                const pathWords = new Set(cleanTokens(p.replace(/\//g, " ")));
+                const overlap = [...titleWords].filter(w => pathWords.has(w)).length;
+                return overlap >= 3;
               } catch { return false; }
             };
             const stopWords = new Set(["para","como","desde","sobre","entre","tras","esta","este","estos","estas","unos","unas","donde","cuando","porque","tambien","segun","despues","durante","hasta","contra","ante","their","there","about","after","before","from","with","that","this","have","will","what","were","been","says","said","into","over","more","than","near","world","mundo","ultima","hora","video","vdeo"]);
@@ -134,7 +155,7 @@ jobs:
                 const evidence = [];
                 const addVideo = (raw, why, allowPublisherPlayer = false) => {
                   const u = absolute(raw, story.url);
-                  if (u && (isVideoUrl(u) || (allowPublisherPlayer && isFirstPartyPlayerUrl(u)))) evidence.push({url:u, evidence:why});
+                  if (u && (isVideoUrl(u) || (allowPublisherPlayer && isRelevantVideoUrl(u, story)))) evidence.push({url:u, evidence:why});
                 };
                 for (const m of html.matchAll(/<(iframe|video|source|embed)\b[^>]*>/gi)) {
                   const el = m[0];
@@ -152,7 +173,7 @@ jobs:
                 for (const m of html.matchAll(/<a\b[^>]*>/gi)) {
                   const raw = attr(m[0],"href");
                   const u = absolute(raw, story.url);
-                  if (u && isFirstPartyPlayerUrl(u)) evidence.push({url:u,evidence:"enlace a posible reproductor del mismo medio"});
+                  if (u && isRelevantVideoUrl(u, story)) evidence.push({url:u,evidence:"enlace específico a vídeo del mismo medio; relevancia por ruta/titular"});
                 }
                 for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
                   const el = m[0];
