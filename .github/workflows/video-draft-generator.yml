@@ -1,12 +1,8 @@
 name: Crear borrador de vídeo original — Mundo al Día
 
 on:
-  push:
-    branches:
-      - feature/original-video-draft-generator
-    paths:
-      - '.github/workflows/video-draft-generator.yml'
-      - 'scripts/create_video_draft.py'
+  # Solo se ejecuta manualmente para que el checkbox publish_video no llegue como null
+  # por ejecuciones automáticas de push.
   workflow_dispatch:
     inputs:
       title:
