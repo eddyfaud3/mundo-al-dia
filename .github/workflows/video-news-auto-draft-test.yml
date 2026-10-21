@@ -113,8 +113,7 @@ jobs:
           narration = (
               "Última hora. " + chosen["title"] + ". "
               "Según la información publicada por " + chosen["source"] + ", " + summary + " "
-              "Este es un borrador automático basado en el resumen de la fuente original. "
-              "Antes de publicarlo, hay que comprobar los datos, la fecha, el contexto y los derechos de las imágenes. "
+              "Seguiremos atentos a las actualizaciones de esta noticia. "
               "Mundo al Día. El mundo, al día."
           )
           result = {
