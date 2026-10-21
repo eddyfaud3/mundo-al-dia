@@ -411,12 +411,12 @@ jobs:
               core.summary.addRaw("No hay candidatos que superen todos los filtros; no se recomienda publicar ningún vídeo.\n\n");
             } else {
               core.summary.addTable([
-                [{data:"Prioridad",header:true},{data:"Titular",header:true},{data:"Fuente",header:true},{data:"Fecha",header:true},{data:"Artículo fuente",header:true},{data:"Vídeo que superó metadatos",header:true},{data:"Revisión obligatoria",header:true}],
+                [{data:"Prioridad",header:true},{data:"Titular",header:true},{data:"Fuente",header:true},{data:"Fecha",header:true},{data:"Artículo fuente",header:true},{data:"Vídeo detectado",header:true},{data:"Revisión obligatoria",header:true}],
                 ...selected.map((s,i) => [
                   String(i+1), s.title, s.source, s.published || "fecha ausente",
                   s.url || "sin URL",
-                  s.finalVerification.checks.filter(c => c.ok).map(c => c.url).join(" ; "),
-                  "Metadatos superados; confirmar correspondencia y derechos antes de publicar"
+                  s.videos.map(v => v.url + " (" + v.evidence + ")").join(" ; "),
+                  "Confirmar vídeo y derechos; si no se confirma, no publicar"
                 ])
               ]);
             }
@@ -426,7 +426,7 @@ jobs:
             core.summary.addRaw("\nCobertura: se indexan las entradas RSS devueltas por las fuentes, pero solo se abren como máximo 8 páginas por fuente en este ensayo. Las fuentes aprobadas (DW Español, BBC Mundo y France 24 Español) se consideran fuentes editoriales principales: no se exige que otra fuente repita la noticia. Los filtros aún comprueban accesibilidad de página, fecha, coincidencia del título y evidencia de un vídeo específico. “Rechazado” significa que el candidato no superó los filtros técnicos de esta prueba, no que la noticia sea falsa. Ninguna decisión autoriza publicación automática.\n");
             await core.summary.write();
             for (const [i, s] of selected.entries()) {
-              core.info("SELECCIÓN PARA REVISIÓN #" + (i+1) + " | " + s.source + " | " + s.published + " | " + s.title + " | ARTÍCULO: " + s.url + " | VÍDEO: " + s.finalVerification.checks.filter(c => c.ok).map(c => c.url).join(" ; ") + " | DERECHOS: revisión humana pendiente");
+              core.info("SELECCIÓN PARA REVISIÓN #" + (i+1) + " | " + s.source + " | " + s.published + " | " + s.title + " | ARTÍCULO: " + s.url + " | VÍDEO: " + s.videos.map(v => v.url).join(" ; ") + " | DERECHOS: revisión humana pendiente");
             }
             core.info("Dry run completado: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas por fuente editorial; " + selected.length + " superaron metadatos y se priorizan para revisión humana; " + finalBlocked.length + " bloqueadas por la verificación final; " + review.length + " necesitan verificación; " + rejected.length + " rechazadas por filtros. No se publicó contenido.");
             if (sourceResults.every(s => !s.ok)) core.setFailed("Ninguna fuente RSS respondió correctamente.");
