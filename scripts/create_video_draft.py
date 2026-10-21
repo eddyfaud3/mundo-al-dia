@@ -400,6 +400,14 @@ def main():
         "-c:a", "aac", "-b:a", "128k", "-t", f"{sum(durations)+2:.3f}",
         "-movflags", "+faststart", str(video)
     ])
+    (OUT / "video-metadata.json").write_text(
+        json.dumps({
+            "title": title,
+            "caption": args.summary.strip(),
+            "source_url": args.source_url,
+        }, ensure_ascii=False, indent=2) + "\\n",
+        encoding="utf-8"
+    )
     (OUT / "README.txt").write_text(
         "Borrador original de Mundo al Día.\n"
         f"Voz neural usada: {voice}; velocidad: {rate}; tono: -2 Hz.\n"
