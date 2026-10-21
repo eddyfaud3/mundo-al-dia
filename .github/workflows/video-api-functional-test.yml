@@ -6,6 +6,7 @@ on:
       - test/video-news-workflow
     paths:
       - "app/api/automation/publish-video/route.js"
+      - "lib/facebook.js"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/video-api-functional-test.yml"
