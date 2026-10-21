@@ -1,0 +1,82 @@
+name: Video news workflow — DRY RUN (no publicar)
+
+on:
+  push:
+    paths:
+      - ".github/workflows/video-news-dry-run.yml"
+  workflow_dispatch:
+  schedule:
+    # Solo monitoreo en esta rama; este workflow nunca publica en redes.
+    - cron: "30 14,23 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mundo-al-dia-video-dry-run
+  cancel-in-progress: false
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Consultar fuentes editoriales y comprobar metadatos de vídeo (sin publicar)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const feeds = [
+              "https://rss.dw.com/rdf/rss-sp-all",
+              "https://feeds.bbci.co.uk/mundo/rss.xml",
+              "https://www.france24.com/es/rss"
+            ];
+            const reports = [];
+            const decode = (s) => s
+              .replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g, "$1")
+              .replace(/&amp;/g, "&").replace(/&quot;/g, '"')
+              .replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<")
+              .replace(/&gt;/g, ">");
+            for (const url of feeds) {
+              try {
+                const response = await fetch(url, {
+                  headers: { "User-Agent": "MundoAlDiaVideoDryRun/1.0" },
+                  signal: AbortSignal.timeout(12000)
+                });
+                if (!response.ok) throw new Error("HTTP " + response.status);
+                const xml = await response.text();
+                const items = [...xml.matchAll(/<item\\b[^>]*>([\\s\\S]*?)<\\/item>/gi)];
+                const videoItems = [];
+                for (const match of items) {
+                  const block = match[1];
+                  const titleMatch = block.match(/<title(?:\\s[^>]*)?>([\\s\\S]*?)<\\/title>/i);
+                  const title = titleMatch ? decode(titleMatch[1].replace(/<[^>]+>/g, "")).trim() : "";
+                  const mediaTags = [...block.matchAll(/<(?:media:content|enclosure)\\b[^>]*>/gi)].map(m => m[0]);
+                  const videoUrl = mediaTags.map(tag => {
+                    const urlMatch = tag.match(/\\burl=["']([^"']+)["']/i);
+                    const typeMatch = tag.match(/\\btype=["']([^"']+)["']/i);
+                    const mediumMatch = tag.match(/\\bmedium=["']([^"']+)["']/i);
+                    const type = (typeMatch?.[1] || "").toLowerCase();
+                    const medium = (mediumMatch?.[1] || "").toLowerCase();
+                    return (type.startsWith("video/") || medium === "video") ? urlMatch?.[1] : null;
+                  }).find(Boolean);
+                  if (title && videoUrl && /^https:\\/\\//i.test(videoUrl)) videoItems.push({ title, videoUrl });
+                }
+                reports.push({ host: new URL(url).hostname, ok: true, itemCount: items.length, videoCount: videoItems.length, examples: videoItems.slice(0, 3) });
+                core.info("OK " + new URL(url).hostname + ": " + items.length + " RSS items; " + videoItems.length + " video enclosures.");
+                for (const item of videoItems.slice(0, 3)) core.info("Video candidate (not published): " + item.title + " — " + item.videoUrl);
+              } catch (e) {
+                reports.push({ host: new URL(url).hostname, ok: false, error: e.message });
+                core.warning("Source check failed for " + new URL(url).hostname + ": " + e.message);
+              }
+            }
+            const healthy = reports.filter(r => r.ok).length;
+            core.summary.addHeading("Mundo al Día — video workflow dry run");
+            core.summary.addRaw("**Modo seguro:** no llama a Railway, Facebook ni Instagram; no crea artículos ni publica contenido.\\n\\n");
+            core.summary.addRaw("Fuentes disponibles: **" + healthy + "/" + feeds.length + "**.\\n\\n");
+            core.summary.addTable([
+              [{data:"Fuente",header:true},{data:"Estado",header:true},{data:"Elementos RSS",header:true},{data:"Vídeos detectados",header:true}],
+              ...reports.map(r => [r.host, r.ok ? "OK" : "ERROR", String(r.itemCount ?? 0), String(r.videoCount ?? 0)])
+            ]);
+            await core.summary.write();
+            if (healthy === 0) core.setFailed("No se pudo consultar ninguna fuente; el modo de prueba no pasa.");
+            else core.info("Dry run terminado. No se publicó ningún contenido.");
