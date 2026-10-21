@@ -40,9 +40,9 @@ jobs:
       - name: Instalar herramientas locales de creación
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg espeak-ng
+          sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install pillow
+          python -m pip install pillow edge-tts
 
       - name: Crear vídeo original en español
         env:
