@@ -25,6 +25,7 @@ jobs:
         env:
           AUTOMATION_SECRET: ${{ secrets.MUNDO_AL_DIA_AUTOMATION_SECRET }}
           AUTO_PUBLISH_ENABLED: ${{ secrets.VIDEO_NEWS_AUTO_PUBLISH_ENABLED }}
+          MEDIA_RIGHTS_CONFIRMED: ${{ secrets.VIDEO_NEWS_MEDIA_RIGHTS_CONFIRMED }}
           SITE_URL: https://mundo-al-dia-github-production.up.railway.app
         with:
           script: |
@@ -445,6 +446,7 @@ jobs:
             // Publicación real protegida por un secreto separado. Si no está activado, el workflow
             // solo genera el informe y nunca llama a Railway.
             const autoPublishEnabled = process.env.AUTO_PUBLISH_ENABLED === "true";
+            const mediaRightsConfirmed = process.env.MEDIA_RIGHTS_CONFIRMED === "true";
             const automationSecret = process.env.AUTOMATION_SECRET || "";
             const siteUrl = process.env.SITE_URL || "";
             const slugify = value => textOf(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 150).replace(/-+$/g, "");
@@ -452,8 +454,11 @@ jobs:
             if (!autoPublishEnabled) {
               core.info("PUBLICACIÓN DESACTIVADA: VIDEO_NEWS_AUTO_PUBLISH_ENABLED no es exactamente true. Solo informe; no se llamó a Railway.");
               core.summary.addRaw("**Publicación automática:** desactivada por seguridad. Para activarla, configurar explícitamente el secreto `VIDEO_NEWS_AUTO_PUBLISH_ENABLED` con el valor `true`.\n\n");
+            } else if (!mediaRightsConfirmed) {
+              core.info("PUBLICACIÓN BLOQUEADA: falta VIDEO_NEWS_MEDIA_RIGHTS_CONFIRMED=true. La verificación técnica no demuestra permiso para reutilizar la imagen ni el vídeo; no se llamó a Railway.");
+              core.summary.addRaw("**Publicación bloqueada:** falta confirmar los derechos/permisos de uso de los medios. Configura `VIDEO_NEWS_MEDIA_RIGHTS_CONFIRMED=true` solo después de confirmar los permisos o limitar el contenido a enlaces/reproductores oficiales y una imagen con uso permitido.\n\n");
             } else if (!automationSecret || !siteUrl) {
-              core.setFailed("La activación de publicación está habilitada, pero faltan MUNDO_AL_DIA_AUTOMATION_SECRET o SITE_URL.");
+              core.setFailed("La activación está habilitada, pero faltan MUNDO_AL_DIA_AUTOMATION_SECRET o SITE_URL.");
             } else {
               for (const story of selected) {
                 const verifiedVideo = story.finalVerification.checks.find(check => check.ok)?.url || "";
