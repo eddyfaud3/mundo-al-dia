@@ -6,6 +6,7 @@ on:
       - "test/video-news-workflow"
     paths:
       - ".github/workflows/video-news-auto-draft-test.yml"
+      - "scripts/create_video_draft.py"
   workflow_dispatch:
 
 permissions:
