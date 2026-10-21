@@ -1,6 +1,12 @@
 name: Crear borrador de vídeo original — Mundo al Día
 
 on:
+  push:
+    branches:
+      - feature/original-video-draft-generator
+    paths:
+      - '.github/workflows/video-draft-generator.yml'
+      - 'scripts/create_video_draft.py'
   workflow_dispatch:
     inputs:
       title:
@@ -44,8 +50,8 @@ jobs:
         env:
           STORY_TITLE: "${{ inputs.title || 'EE. UU. e Irán siguen sin acuerdo y aumenta la tensión en el estrecho de Ormuz' }}"
           STORY_SUMMARY: "${{ inputs.summary || 'Los contactos entre Estados Unidos e Irán continúan estancados, mientras crece la preocupación por la seguridad marítima en el estrecho de Ormuz. Reuters informó el 21 de octubre de que los precios del petróleo subieron ante el temor a interrupciones del suministro en Oriente Medio. La situación sigue siendo cambiante y no existe un acuerdo definitivo.' }}"
-          STORY_NARRATION: "${{ inputs.narration }}"
-          STORY_SOURCE_URL: "${{ inputs.source_url }}"
+          STORY_NARRATION: "${{ inputs.narration || 'Última hora. Cuatro personas murieron tras una nueva serie de ataques rusos contra Ucrania. Entre las víctimas hay dos adultos mayores de más de 80 años. En Kyiv, un dron impactó un edificio de apartamentos, mientras que cerca de Járkiv murió una pareja de ancianos. Los ataques también afectaron instalaciones energéticas en varias regiones. Las autoridades informaron de daños en edificios residenciales y otras infraestructuras civiles. La situación sigue siendo tensa mientras continúan los esfuerzos diplomáticos para poner fin a la guerra. Mundo al Día. El mundo, al día.' }}"
+          STORY_SOURCE_URL: "${{ inputs.source_url || 'https://www.reuters.com/world/europe/four-killed-russian-strikes-ukraine-prime-minister-says-2026-10-21/' }}"
         run: |
           python scripts/create_video_draft.py \
             --title "$STORY_TITLE" \
