@@ -44,8 +44,21 @@ jobs:
               try {
                 const u = new URL(raw);
                 const h = u.hostname.toLowerCase();
-                const approvedHost = h === "youtu.be" || h === "youtube.com" || h.endsWith(".youtube.com") || h === "vimeo.com" || h.endsWith(".vimeo.com") || h === "dailymotion.com" || h.endsWith(".dailymotion.com");
-                return approvedHost || /\.(mp4|m3u8|webm|mov)$/i.test(u.pathname);
+                const p = u.pathname;
+                const q = u.searchParams;
+                // A channel, profile, playlist, or publisher home page is NOT a specific video.
+                if (h === "youtu.be") return /^\/[A-Za-z0-9_-]{6,}$/.test(p);
+                if (h === "youtube.com" || h.endsWith(".youtube.com")) {
+                  if (p === "/watch") return /^[A-Za-z0-9_-]{6,}$/.test(q.get("v") || "");
+                  return /^\/(?:shorts|embed|live)\/[A-Za-z0-9_-]{6,}/i.test(p);
+                }
+                if (h === "vimeo.com" || h.endsWith(".vimeo.com")) {
+                  return /^\/(?:video\/)?\d{6,}(?:\/|$)/i.test(p) && !/^\/(?:channels|groups|showcase|user|album)\//i.test(p);
+                }
+                if (h === "dailymotion.com" || h.endsWith(".dailymotion.com")) {
+                  return /^\/(?:video|embed\/video)\/[A-Za-z0-9]+/i.test(p);
+                }
+                return /\.(mp4|m3u8|webm|mov)$/i.test(p);
               } catch { return false; }
             };
             // Algunos medios usan un reproductor alojado en su propio dominio, no una URL de YouTube/MP4.
@@ -117,7 +130,8 @@ jobs:
                 const xml = await fetchText(feed.url, 12000);
                 const blocks = [...xml.matchAll(/<(?:[\w.-]+:)?(?:item|entry)\b[^>]*>[\s\S]*?<\/(?:[\w.-]+:)?(?:item|entry)\s*>/gi)].map(m => m[0]);
                 const parsed = blocks.map(block => {
-                  const title = tag(block, "title") || attr((block.match(/<(?:[\\w.-]+:)?title\\b[^>]*>/i) || [""])[0], "value") || "(sin título)";
+                  const titleMatch = block.match(/<(?:[\w.-]+:)?title\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?title\s*>/i);
+                  const title = titleMatch ? textOf(decode(titleMatch[1]).replace(/^<!\[CDATA\[|\]\]>$/g, "")) : (tag(block, "title") || "(sin título)");
                   const link = absolute(getLink(block), feed.url);
                   const published = tag(block, "pubDate") || tag(block, "published") || tag(block, "updated") || tag(block, "date");
                   const dateMs = published ? Date.parse(published) : NaN;
