@@ -214,7 +214,7 @@ jobs:
                 story.videos = [...new Map([...evidence, ...story.rssVideos].map(v => [v.url,v])).values()].slice(0,8);
                 story.pageText = textOf(html).slice(0,12000);
                 // Imagen editorial original: se acepta solo una URL HTTPS no alojada por Google.
-                const ogImageTag = (html.match(/<meta\\b[^>]*>/gi) || []).find(el => /og:image|twitter:image/i.test(attr(el, "property") + " " + attr(el, "name")));
+                const ogImageTag = (html.match(/<meta\b[^>]*>/gi) || []).find(el => /og:image|twitter:image/i.test(attr(el, "property") + " " + attr(el, "name")));
                 const rawImage = ogImageTag ? attr(ogImageTag, "content") : "";
                 const candidateImage = absolute(rawImage, story.finalUrl || story.url);
                 try {
@@ -442,7 +442,7 @@ jobs:
             const autoPublishEnabled = process.env.AUTO_PUBLISH_ENABLED === "true";
             const automationSecret = process.env.AUTOMATION_SECRET || "";
             const siteUrl = process.env.SITE_URL || "";
-            const slugify = value => textOf(value).normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 150).replace(/-+$/g, "");
+            const slugify = value => textOf(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 150).replace(/-+$/g, "");
             let publishedCount = 0;
             if (!autoPublishEnabled) {
               core.info("PUBLICACIÓN DESACTIVADA: VIDEO_NEWS_AUTO_PUBLISH_ENABLED no es exactamente true. Solo informe; no se llamó a Railway.");
@@ -469,7 +469,7 @@ jobs:
                   "Vídeo original del medio: " + verifiedVideo,
                   "",
                   "Mundo al Día comparte el enlace al vídeo original; no descarga ni vuelve a subir el archivo de vídeo."
-                ].join("\\n");
+                ].join("\n");
                 try {
                   const response = await fetch(new URL("/api/automation/publish", siteUrl), {
                     method: "POST",
