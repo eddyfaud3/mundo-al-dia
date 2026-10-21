@@ -110,7 +110,77 @@ jobs:
           print("PUBLICADO=NO — revisión editorial humana obligatoria.")
           PY
 
-      - name: Guardar borrador como artefacto
+
+      - name: Guardar MP4 en Cloudinary como URL pública HTTPS
+        if: ${{ inputs.publish_video == true }}
+        env:
+          CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDINARY_URL:-}" ]; then
+            echo "::error::Falta configurar el secreto CLOUDINARY_URL en GitHub. No se publicó nada."
+            exit 1
+          fi
+          npm install --no-save cloudinary
+          node --input-type=module <<'NODE'
+          import { v2 as cloudinary } from "cloudinary";
+          import { stat } from "node:fs/promises";
+          const file = "video-draft-output/mundo-al-dia-video-original.mp4";
+          const info = await stat(file);
+          if (info.size < 10000) throw new Error("MP4 ausente o demasiado pequeño.");
+          const uploaded = await cloudinary.uploader.upload(file, {
+            resource_type: "video",
+            folder: "mundo-al-dia/videos",
+            public_id: `mundo-al-dia-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`,
+            overwrite: false,
+            invalidate: false,
+          });
+          if (!uploaded.secure_url || !uploaded.secure_url.startsWith("https://")) {
+            throw new Error("Cloudinary no devolvió una URL HTTPS pública.");
+          }
+          const fs = await import("node:fs/promises");
+          await fs.writeFile("video-draft-output/public-video-url.txt", uploaded.secure_url + "\\n");
+          console.log("MP4 cargado a almacenamiento público HTTPS; todavía no publicado en redes.");
+          NODE
+
+      - name: Publicar Reel en Facebook e Instagram
+        if: ${{ inputs.publish_video == true }}
+        env:
+          AUTOMATION_SECRET: ${{ secrets.MUNDO_AL_DIA_AUTOMATION_SECRET }}
+          SITE_URL: https://mundo-al-dia-github-production.up.railway.app
+        run: |
+          set -euo pipefail
+          if [ -z "${AUTOMATION_SECRET:-}" ]; then
+            echo "::error::Falta MUNDO_AL_DIA_AUTOMATION_SECRET. No se publicará."
+            exit 1
+          fi
+          VIDEO_URL="$(cat video-draft-output/public-video-url.txt)"
+          python - <<'PY'
+          import json, os, urllib.request
+          with open("video-draft-output/README.txt", encoding="utf-8") as f:
+              readme = f.read()
+          # The reviewed title is written to the manifest by the generator.
+          with open("video-draft-output/video-metadata.json", encoding="utf-8") as f:
+              metadata = json.load(f)
+          payload = {
+              "video_url": os.environ["VIDEO_URL"],
+              "title": metadata["title"],
+              "caption": metadata.get("caption", metadata["title"]),
+          }
+          request = urllib.request.Request(
+              os.environ["SITE_URL"].rstrip("/") + "/api/automation/publish-video",
+              data=json.dumps(payload).encode(),
+              headers={"Authorization": "Bearer " + os.environ["AUTOMATION_SECRET"],
+                       "Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=120) as response:
+              result = json.loads(response.read().decode())
+          print(json.dumps(result, ensure_ascii=False))
+          if not result.get("facebook", {}).get("published") or not result.get("instagram", {}).get("published"):
+              raise SystemExit("La publicación en ambas redes no quedó confirmada.")
+          PY
+\n      - name: Guardar borrador como artefacto
         uses: actions/upload-artifact@v4
         with:
           name: mundo-al-dia-video-original-draft
