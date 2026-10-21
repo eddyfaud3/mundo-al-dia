@@ -250,16 +250,15 @@ def draw_scene(path, title, body, index, total, end_card=False):
     d.rectangle((0, 0, W, 22), fill=CYAN)
     d.ellipse((760, -190, 1260, 310), outline=(35, 112, 165), width=5)
     d.ellipse((-220, 1400, 220, 1840), outline=(35, 112, 165), width=5)
-    # Marca inspirada en la identidad de Mundo al Día: globo azul, bandas rojas y nombre blanco.
-    d.rounded_rectangle((66, 62, 510, 160), radius=30, fill=(5, 17, 37), outline=CYAN, width=3)
-    gx, gy, gr = 116, 111, 34
-    d.ellipse((gx-gr, gy-gr, gx+gr, gy+gr), fill=(22, 105, 190), outline=WHITE, width=2)
-    d.arc((gx-19, gy-gr+3, gx+19, gy+gr-3), 0, 360, fill=WHITE, width=2)
-    d.arc((gx-gr+5, gy-15, gx+gr-5, gy+15), 0, 360, fill=WHITE, width=2)
-    d.line((gx-gr+4, gy, gx+gr-4, gy), fill=WHITE, width=2)
-    d.arc((gx-gr+2, gy-24, gx+gr-2, gy+24), 205, 335, fill=(235, 55, 65), width=7)
-    d.arc((gx-gr+2, gy-24, gx+gr-2, gy+24), 25, 155, fill=(235, 55, 65), width=7)
-    d.text((164, 86), "MUNDO AL DÍA", font=font(34, True), fill=WHITE)
+    # Usar el logo oficial del repositorio, conservando sus colores azul, rojo, blanco y dorado.
+    logo_path = OUT / "logo-mundo-al-dia.png"
+    if logo_path.exists():
+        logo = Image.open(logo_path).convert("RGBA")
+        logo.thumbnail((390, 143), Image.Resampling.LANCZOS)
+        plate = Image.new("RGBA", (430, 155), (5, 17, 37, 235))
+        plate.alpha_composite(logo, ((430 - logo.width) // 2, (155 - logo.height) // 2))
+        im.paste(plate, (54, 42), plate)
+        d = ImageDraw.Draw(im)
     d.text((72, 190), "NOTICIAS INTERNACIONALES", font=font(25, True), fill=MUTED)
     if end_card:
         d.text((72, 230), "GRACIAS POR INFORMARTE", font=font(34, True), fill=MUTED)
@@ -321,12 +320,19 @@ def main():
     if len(narration) < 100 or len(narration) > 2600:
         raise SystemExit("La narración debe tener entre 100 y 2600 caracteres.")
     OUT.mkdir(parents=True, exist_ok=True)
+    # Renderizar el logo SVG oficial para integrarlo nítidamente en el vídeo.
+    logo_svg = Path("public/logo-mundo-al-dia.svg")
+    if not logo_svg.is_file():
+        raise RuntimeError("No se encuentra el logo oficial public/logo-mundo-al-dia.svg.")
+    import cairosvg
+    cairosvg.svg2png(url=str(logo_svg), write_to=str(OUT / "logo-mundo-al-dia.png"),
+                     output_width=900, output_height=330)
     global PHOTO_PATHS, PHOTO_CREDITS
     # Use only images found on the exact article page. Never silently substitute unrelated stock/context images.
     PHOTO_CREDITS = download_article_images(OUT, args.source_url, max_images=6)
     PHOTO_PATHS = [item["path"] for item in PHOTO_CREDITS]
     save_photo_credits(OUT, PHOTO_CREDITS)
-    voice = os.environ.get("MUNDO_AL_DIA_TTS_VOICE", "es-US-AlonsoNeural")
+    voice = os.environ.get("MUNDO_AL_DIA_TTS_VOICE", "es-MX-JorgeNeural")
     rate = os.environ.get("MUNDO_AL_DIA_TTS_RATE", "-8%")
     # Create one scene per available source-article image (up to six), plus the branded end card.
     # If the article has only one usable image, make one editorial scene instead of forcing three images.
@@ -382,7 +388,7 @@ def main():
         run([
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-loop", "1", "-i", str(p),
-            "-vf", "zoompan=z='min(1.0+0.0007*on,1.06)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30,format=yuv420p",
+            "-vf", "zoompan=z='min(1.0+0.0011*on,1.08)':x='iw/2-(iw/zoom/2)+12*sin(on/35)':y='ih/2-(ih/zoom/2)+10*cos(on/42)':d=1:s=1080x1920:fps=30,format=yuv420p",
             "-frames:v", str(frames), "-an",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
             "-pix_fmt", "yuv420p", str(clip)
