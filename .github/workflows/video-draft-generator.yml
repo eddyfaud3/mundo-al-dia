@@ -55,11 +55,35 @@ jobs:
             --summary "$STORY_SUMMARY" \
             --narration "$STORY_NARRATION"
 
-      - name: Comprobar el archivo MP4
+      - name: Verificación final de vídeo y audio
         run: |
-          test -s video-draft-output/mundo-al-dia-video-original.mp4
-          ffprobe -v error -show_entries format=duration,size \
-            -of default=noprint_wrappers=1 video-draft-output/mundo-al-dia-video-original.mp4
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          video = Path("video-draft-output/mundo-al-dia-video-original.mp4")
+          audio = Path("video-draft-output/narracion_es.mp3")
+          assert video.is_file() and video.stat().st_size > 10000, "Falta el MP4 o es demasiado pequeño."
+          assert audio.is_file() and audio.stat().st_size > 1000, "Falta el audio de narración."
+
+          raw = subprocess.check_output([
+              "ffprobe", "-v", "error", "-show_streams", "-show_format",
+              "-of", "json", str(video)
+          ], text=True)
+          info = json.loads(raw)
+          streams = info.get("streams", [])
+          video_streams = [s for s in streams if s.get("codec_type") == "video"]
+          audio_streams = [s for s in streams if s.get("codec_type") == "audio"]
+          assert video_streams, "El MP4 no contiene pista de vídeo."
+          assert audio_streams, "El MP4 no contiene pista de audio."
+          assert video_streams[0].get("width") == 1080, "El vídeo no tiene 1080 píxeles de ancho."
+          assert video_streams[0].get("height") == 1920, "El vídeo no tiene 1920 píxeles de alto."
+          duration = float(info["format"].get("duration", 0))
+          assert duration >= 5, f"Duración inesperada: {duration:.1f} segundos."
+          print(f"Verificación técnica OK: 1080x1920, audio presente, {duration:.1f} s.")
+          print("PUBLICADO=NO — revisión editorial humana obligatoria.")
+          PY
 
       - name: Guardar borrador como artefacto
         uses: actions/upload-artifact@v4
