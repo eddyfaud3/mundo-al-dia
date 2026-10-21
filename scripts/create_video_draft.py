@@ -37,7 +37,7 @@ def download_verified_commons_photo(out_dir, search_query, filename, required_an
     with urllib.request.urlopen(req, timeout=25) as response:
         data = json.loads(response.read().decode("utf-8"))
     pages = (data.get("query", {}).get("pages", {}) or {}).values()
-    accepted = {"public domain", "cc0", "cc by 4.0", "cc by 3.0", "cc by 2.0", "cc by 1.0"}
+    accepted = {"public domain", "cc0", "cc by 4.0", "cc by 3.0", "cc by 2.0", "cc by 1.0", "cc by-sa 4.0", "cc by-sa 3.0", "cc by-sa 2.0", "cc by-sa 1.0"}
     for page in pages:
         info = (page.get("imageinfo") or [{}])[0]
         meta = info.get("extmetadata", {})
@@ -244,9 +244,9 @@ def main():
         ("White House", "foto_casa_blanca.jpg",
          ["white house"],
          ["barack obama", "malcolm turnbull", "portrait", "inside", "interior", "meeting", "document", "screenshot", "computer", "logo", "seal", "flag", "model"]),
-        ("Iran foreign minister Abbas Araghchi diplomatic meeting", "foto_reunion_diplomatica.jpg",
-         ["abbas araghchi", "araghchi iran", "iran foreign minister", "iranian diplomatic meeting"],
-         ["document", "screenshot", "webpage", "computer screen", "logo", "flag only"]),
+        ("Abbas Araghchi", "foto_reunion_diplomatica.jpg",
+         ["abbas araghchi", "araghchi"],
+         ["document", "screenshot", "webpage", "computer screen", "logo", "flag only", "cartoon", "illustration"]),
         ("oil tanker cargo ship Strait of Hormuz shipping", "foto_estrecho_hormuz.jpg",
          ["oil tanker", "oil tanker ship", "cargo ship strait of hormuz", "tanker strait of hormuz"],
          ["document", "screenshot", "webpage", "computer screen", "diagram", "map", "model ship", "toy ship"]),
