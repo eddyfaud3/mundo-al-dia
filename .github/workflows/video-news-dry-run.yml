@@ -246,7 +246,7 @@ jobs:
               }
               decision.push({...story,status,reason,peerEvidence});
             }
-            const confirmed = decision.filter(s => s.status === "CONFIRMADO (preliminar)");
+            const confirmed = decision.filter(s => s.status === "CONFIRMADO (fuente editorial fiable)");
             const review = decision.filter(s => s.status === "NECESITA VERIFICACIÓN");
             const rejected = decision.filter(s => s.status === "RECHAZADO");
             core.summary.addHeading("Mundo al Día — verificación de vídeos (DRY RUN)");
@@ -272,10 +272,10 @@ jobs:
                 ])
               ]);
             };
-            renderTable(confirmed,"1. CONFIRMADOS PRELIMINARMENTE — revisión humana obligatoria");
+            renderTable(confirmed,"1. CONFIRMADOS POR FUENTE EDITORIAL — revisión humana obligatoria");
             renderTable(review,"2. NECESITAN VERIFICACIÓN");
             renderTable(rejected,"3. RECHAZADOS POR LOS FILTROS DE ESTA PRUEBA");
             core.summary.addRaw("\nCobertura: se indexan las entradas RSS devueltas por las fuentes, pero solo se abren como máximo 8 páginas por fuente en este ensayo. Las fuentes aprobadas (DW Español, BBC Mundo y France 24 Español) se consideran fuentes editoriales principales: no se exige que otra fuente repita la noticia. Los filtros aún comprueban accesibilidad de página, fecha, coincidencia del título y evidencia de un vídeo específico. “Rechazado” significa que el candidato no superó los filtros técnicos de esta prueba, no que la noticia sea falsa. Ninguna decisión autoriza publicación automática.\n");
             await core.summary.write();
-            core.info("Dry run completado: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas preliminarmente; " + review.length + " necesitan verificación; " + rejected.length + " rechazadas por filtros. No se publicó contenido.");
+            core.info("Dry run completado: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas por fuente editorial; " + review.length + " necesitan verificación; " + rejected.length + " rechazadas por filtros. No se publicó contenido.");
             if (sourceResults.every(s => !s.ok)) core.setFailed("Ninguna fuente RSS respondió correctamente.");
