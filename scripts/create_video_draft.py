@@ -250,8 +250,16 @@ def draw_scene(path, title, body, index, total, end_card=False):
     d.rectangle((0, 0, W, 22), fill=CYAN)
     d.ellipse((760, -190, 1260, 310), outline=(35, 112, 165), width=5)
     d.ellipse((-220, 1400, 220, 1840), outline=(35, 112, 165), width=5)
-    d.rounded_rectangle((66, 72, 440, 145), radius=28, fill=CYAN)
-    d.text((92, 84), "MUNDO AL DÍA", font=font(34, True), fill=NAVY)
+    # Marca inspirada en la identidad de Mundo al Día: globo azul, bandas rojas y nombre blanco.
+    d.rounded_rectangle((66, 62, 510, 160), radius=30, fill=(5, 17, 37), outline=CYAN, width=3)
+    gx, gy, gr = 116, 111, 34
+    d.ellipse((gx-gr, gy-gr, gx+gr, gy+gr), fill=(22, 105, 190), outline=WHITE, width=2)
+    d.arc((gx-19, gy-gr+3, gx+19, gy+gr-3), 0, 360, fill=WHITE, width=2)
+    d.arc((gx-gr+5, gy-15, gx+gr-5, gy+15), 0, 360, fill=WHITE, width=2)
+    d.line((gx-gr+4, gy, gx+gr-4, gy), fill=WHITE, width=2)
+    d.arc((gx-gr+2, gy-24, gx+gr-2, gy+24), 205, 335, fill=(235, 55, 65), width=7)
+    d.arc((gx-gr+2, gy-24, gx+gr-2, gy+24), 25, 155, fill=(235, 55, 65), width=7)
+    d.text((164, 86), "MUNDO AL DÍA", font=font(34, True), fill=WHITE)
     d.text((72, 190), "NOTICIAS INTERNACIONALES", font=font(25, True), fill=MUTED)
     if end_card:
         d.text((72, 230), "GRACIAS POR INFORMARTE", font=font(34, True), fill=MUTED)
@@ -364,19 +372,30 @@ def main():
     draw_scene(end_card_path, title, "El mundo, al día.", len(scene_paths)+1,
                len(scene_paths)+1, end_card=True)
     scene_paths.append(end_card_path)
-    concat = OUT / "escenas.txt"
+    # Render each still as a gently animated clip (slow Ken Burns zoom), then join clips to narration.
+    concat = OUT / "escenas_animadas.txt"
+    animated_clips = []
+    clip_durations = durations + [2.0]
+    for i, (p, dur) in enumerate(zip(scene_paths, clip_durations), 1):
+        clip = OUT / f"clip_animado_{i:02d}.mp4"
+        frames = max(1, int(round(dur * 30)))
+        run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-loop", "1", "-i", str(p),
+            "-vf", "zoompan=z='min(1.0+0.0007*on,1.06)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30,format=yuv420p",
+            "-frames:v", str(frames), "-an",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+            "-pix_fmt", "yuv420p", str(clip)
+        ])
+        animated_clips.append(clip)
     with concat.open("w", encoding="utf-8") as f:
-        for p, dur in zip(scene_paths[:-1], durations):
-            f.write(f"file '{p.resolve()}'\n")
-            f.write(f"duration {dur:.3f}\n")
-        f.write(f"file '{scene_paths[-1].resolve()}'\n")
-        f.write("duration 2.000\n")
-        f.write(f"file '{scene_paths[-1].resolve()}'\n")
+        for clip in animated_clips:
+            f.write(f"file '{clip.resolve()}'\n")
     video = OUT / "mundo-al-dia-video-original.mp4"
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
         "-f", "concat", "-safe", "0", "-i", str(concat), "-i", str(audio),
-        "-vf", "fps=30,format=yuv420p", "-af", "apad=pad_dur=2",
+        "-af", "apad=pad_dur=2",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
         "-c:a", "aac", "-b:a", "128k", "-t", f"{sum(durations)+2:.3f}",
         "-movflags", "+faststart", str(video)
