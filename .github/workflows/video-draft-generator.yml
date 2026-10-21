@@ -44,12 +44,14 @@ jobs:
       - name: Descargar el código
         uses: actions/checkout@v4
 
-      - name: Instalar herramientas locales de creación
+      - name: Instalar y verificar herramientas locales de creación
         run: |
+          set -euxo pipefail
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install pillow edge-tts cairosvg
+          python -m pip install --upgrade pillow edge-tts CairoSVG
+          python -c "import cairosvg; print('CairoSVG instalado correctamente:', cairosvg.__version__)"
 
       - name: Crear vídeo original en español
         env:
