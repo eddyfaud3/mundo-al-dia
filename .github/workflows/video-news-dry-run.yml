@@ -1,4 +1,4 @@
-name: Video news workflow — DRY RUN (no publicar)
+name: Video news workflow — DRY RUN (no publicar; prueba de filtro)
 
 on:
   push:
