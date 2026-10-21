@@ -1,0 +1,432 @@
+name: Video news workflow — DRY RUN (no publicar; prueba de filtro)
+
+on:
+  push:
+    paths:
+      - ".github/workflows/video-news-dry-run.yml"
+  workflow_dispatch:
+  # Dos comprobaciones diarias en UTC. GitHub solo ejecuta schedule desde la rama predeterminada.
+  # Este flujo sigue siendo DRY RUN y nunca publica contenido.
+  schedule:
+    - cron: "0 12,22 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verificar enlaces, páginas, fechas y corroboración independiente (solo informe)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const feeds = [
+              { name: "DW Español", url: "https://rss.dw.com/rdf/rss-sp-all" },
+              { name: "BBC Mundo", url: "https://feeds.bbci.co.uk/mundo/rss.xml" },
+              { name: "France 24 Español", url: "https://www.france24.com/es/rss" }
+            ];
+            const headers = {
+              "user-agent": "MundoAlDia-DryRun/2.0 (editorial verification test)",
+              "accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.9, */*;q=0.8"
+            };
+            const decode = s => String(s || "").replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
+            const textOf = s => decode(String(s || "").replace(/<script\b[\s\S]*?<\/script>/gi, " ").replace(/<style\b[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+            const attr = (s, name) => {
+              const re = new RegExp("\\b" + name + "\\s*=\\s*(['\"])(.*?)\\1", "i");
+              const m = String(s || "").match(re);
+              return m ? decode(m[2]) : "";
+            };
+            const tag = (s, name) => {
+              const re = new RegExp("<(?:[\\w.-]+:)?" + name + "\\b[^>]*>([\\s\\S]*?)<\\/(?:[\\w.-]+:)?" + name + "\\s*>", "i");
+              const m = String(s || "").match(re);
+              return m ? textOf(m[1]) : "";
+            };
+            const absolute = (raw, base) => { try { return new URL(raw, base).href; } catch { return ""; } };
+            const isVideoUrl = raw => {
+              try {
+                const u = new URL(raw);
+                const h = u.hostname.toLowerCase();
+                const p = u.pathname;
+                const q = u.searchParams;
+                // A channel, profile, playlist, or publisher home page is NOT a specific video.
+                if (h === "youtu.be") return /^\/[A-Za-z0-9_-]{6,}$/.test(p);
+                if (h === "youtube.com" || h.endsWith(".youtube.com")) {
+                  if (p === "/watch") return /^[A-Za-z0-9_-]{6,}$/.test(q.get("v") || "");
+                  return /^\/(?:shorts|embed|live)\/[A-Za-z0-9_-]{6,}/i.test(p);
+                }
+                if (h === "vimeo.com" || h.endsWith(".vimeo.com")) {
+                  return /^\/(?:video\/)?\d{6,}(?:\/|$)/i.test(p) && !/^\/(?:channels|groups|showcase|user|album)\//i.test(p);
+                }
+                if (h === "dailymotion.com" || h.endsWith(".dailymotion.com")) {
+                  return /^\/(?:video|embed\/video)\/[A-Za-z0-9]+/i.test(p);
+                }
+                return /\.(mp4|m3u8|webm|mov)$/i.test(p);
+              } catch { return false; }
+            };
+            // Algunos medios usan un reproductor alojado en su propio dominio, no una URL de YouTube/MP4.
+            // Solo aceptamos rutas que identifiquen explícitamente un player, embed o vídeo.
+            const isFirstPartyPlayerUrl = raw => {
+              try {
+                const u = new URL(raw);
+                const h = u.hostname.toLowerCase();
+                const trustedPublisher = h === "dw.com" || h.endsWith(".dw.com") ||
+                  h === "bbc.com" || h.endsWith(".bbc.com") || h === "bbc.co.uk" || h.endsWith(".bbc.co.uk") ||
+                  h === "france24.com" || h.endsWith(".france24.com");
+                const path = decodeURIComponent(u.pathname).toLowerCase();
+                if (!trustedPublisher) return false;
+                // A broad /video/ link is not enough: require a specific content/player route.
+                if (h.endsWith("france24.com")) return /^\/es\/video\/\d{8}-[^/]+$/.test(path);
+                if (h.endsWith("dw.com")) return /^\/es\/[^/]+\/video-\d+\.html$/.test(path) || /\/(embed|player|av-embed|media-player|playback)\//i.test(path);
+                return /\/(embed|player|av-embed|media-player|playback)\//i.test(path) || /^\/[^/]+\/video\/[^/]+$/i.test(path);
+              } catch { return false; }
+            };
+            const isRelevantVideoUrl = (raw, story) => {
+              try {
+                const u = new URL(raw);
+                if (isVideoUrl(raw)) return true;
+                if (!isFirstPartyPlayerUrl(raw)) return false;
+                const article = new URL(story.url);
+                // La propia página del artículo no cuenta como enlace de vídeo; debe ser un player/embed o vídeo real.
+                if (u.hostname === article.hostname && u.pathname === article.pathname) return false;
+                const p = decodeURIComponent(u.pathname).toLowerCase();
+                const a = decodeURIComponent(article.pathname).toLowerCase();
+                // First-party player must be the story itself or have a strong title overlap.
+                if (u.hostname === article.hostname && (u.pathname === article.pathname || p.startsWith(a + "/"))) return true;
+                const titleWords = new Set(cleanTokens(story.title));
+                const pathWords = new Set(cleanTokens(p.replace(/\//g, " ")));
+                const overlap = [...titleWords].filter(w => pathWords.has(w)).length;
+                return overlap >= 3;
+              } catch { return false; }
+            };
+            const stopWords = new Set(["para","como","desde","sobre","entre","tras","esta","este","estos","estas","unos","unas","donde","cuando","porque","tambien","segun","despues","durante","hasta","contra","ante","their","there","about","after","before","from","with","that","this","have","will","what","were","been","says","said","into","over","more","than","near","world","mundo","ultima","hora","video","vdeo"]);
+            const cleanTokens = s => textOf(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length >= 4 && !stopWords.has(w));
+            const similarity = (a,b) => {
+              const aa = new Set(cleanTokens(a)), bb = new Set(cleanTokens(b));
+              const common = [...aa].filter(w => bb.has(w));
+              const ratio = common.length / Math.max(1, Math.min(aa.size, bb.size));
+              return { common, ratio, match: common.length >= 3 && ratio >= 0.55 };
+            };
+            const fetchText = async (url, ms = 8000) => {
+              const res = await fetch(url, { headers, signal: AbortSignal.timeout(ms), redirect: "follow" });
+              if (!res.ok) throw new Error("HTTP " + res.status);
+              return await res.text();
+            };
+            // Diagnóstico de página: conserva código HTTP, URL final y tipo de contenido.
+            const fetchPage = async (url, ms = 7000) => {
+              const res = await fetch(url, { headers, signal: AbortSignal.timeout(ms), redirect: "follow" });
+              const html = await res.text();
+              return { html, status: res.status, finalUrl: res.url, contentType: res.headers.get("content-type") || "" };
+            };
+            const getLink = block => {
+              const linkTag = block.match(/<(?:[\w.-]+:)?link\b[^>]*>/i);
+              if (linkTag) {
+                const href = attr(linkTag[0], "href");
+                const rel = attr(linkTag[0], "rel");
+                if (href && (!rel || rel === "alternate")) return href;
+              }
+              return tag(block, "link");
+            };
+            const allIndex = [];
+            const inspectQueue = [];
+            const sourceResults = [];
+            for (const feed of feeds) {
+              try {
+                const xml = await fetchText(feed.url, 12000);
+                const blocks = [...xml.matchAll(/<(?:[\w.-]+:)?(?:item|entry)\b[^>]*>[\s\S]*?<\/(?:[\w.-]+:)?(?:item|entry)\s*>/gi)].map(m => m[0]);
+                const parsed = blocks.map(block => {
+                  const titleMatch = block.match(/<(?:[\w.-]+:)?title\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?title\s*>/i);
+                  const title = titleMatch ? textOf(decode(titleMatch[1]).replace(/^<!\[CDATA\[|\]\]>$/g, "")) : (tag(block, "title") || "(sin título)");
+                  const link = absolute(getLink(block), feed.url);
+                  const published = tag(block, "pubDate") || tag(block, "published") || tag(block, "updated") || tag(block, "date");
+                  const dateMs = published ? Date.parse(published) : NaN;
+                  const rssVideos = [];
+                  for (const m of block.matchAll(/<(?:[\w.-]+:)?(?:content|player|enclosure)\b[^>]*>/gi)) {
+                    const el = m[0];
+                    const raw = attr(el, "url") || attr(el, "href");
+                    const type = attr(el, "type") + " " + attr(el, "medium");
+                    const u = absolute(raw, feed.url);
+                    if (u && (isVideoUrl(u) || /video/i.test(type))) rssVideos.push({url:u, evidence:"adjunto multimedia RSS/Atom"});
+                  }
+                  return { source:feed.name, feedUrl:feed.url, title, url:link, published, dateMs, rssVideos, pageChecked:false, pageStatus:"sin inspeccionar página", videos:[], pageTitle:"", pageText:"", reason:"" };
+                });
+                allIndex.push(...parsed);
+                inspectQueue.push(...parsed.filter(s => s.url && /^https?:/i.test(s.url)).slice(0, 8));
+                sourceResults.push({ name:feed.name, url:feed.url, ok:true, count:blocks.length, indexed:parsed.length, inspected:0, embeds:0 });
+                core.info("RSS OK " + feed.name + ": " + blocks.length + " entradas; se inspeccionarán hasta 8 páginas.");
+              } catch (e) {
+                sourceResults.push({ name:feed.name, url:feed.url, ok:false, count:0, indexed:0, inspected:0, embeds:0, error:e.message });
+                core.warning("Falló la fuente " + feed.name + ": " + e.message);
+              }
+            }
+            for (const story of inspectQueue) {
+              try {
+                const page = await fetchPage(story.url, 7000);
+                const html = page.html;
+                story.httpStatus = page.status;
+                story.finalUrl = page.finalUrl;
+                story.contentType = page.contentType;
+                story.pageChecked = page.status >= 200 && page.status < 400 && /html|xml/i.test(page.contentType);
+                story.pageStatus = "HTTP " + page.status + "; " + (page.contentType || "tipo desconocido") + "; URL final: " + page.finalUrl;
+                if (!story.pageChecked) story.reason = "La respuesta no parece una página HTML/XML accesible para inspección.";
+                const titleTag = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+                story.pageTitle = titleTag ? textOf(titleTag[1]) : "";
+                const evidence = [];
+                const addVideo = (raw, why, allowPublisherPlayer = false) => {
+                  const u = absolute(raw, story.url);
+                  if (u && (isVideoUrl(u) || (allowPublisherPlayer && isRelevantVideoUrl(u, story)))) evidence.push({url:u, evidence:why});
+                };
+                for (const m of html.matchAll(/<(iframe|video|source|embed)\b[^>]*>/gi)) {
+                  const el = m[0];
+                  const raw = attr(el,"src") || attr(el,"data-src") || attr(el,"data-video-url") || attr(el,"data-embed-url") || attr(el,"data-player-url");
+                  addVideo(raw, "<" + m[1].toLowerCase() + "> dentro de la página", /iframe|embed/i.test(m[1]));
+                }
+                // Busca URLs de reproductor en atributos de carga diferida y enlaces de la página.
+                for (const m of html.matchAll(/<[a-z][\w:-]*\b[^>]*>/gi)) {
+                  const el = m[0];
+                  for (const key of ["data-src","data-href","data-url","data-video-url","data-embed-url","data-player-url","data-player","data-media-url"]) {
+                    const raw = attr(el,key);
+                    if (raw) addVideo(raw, "atributo " + key, true);
+                  }
+                }
+                for (const m of html.matchAll(/<a\b[^>]*>/gi)) {
+                  const raw = attr(m[0],"href");
+                  const u = absolute(raw, story.url);
+                  if (u && isRelevantVideoUrl(u, story)) evidence.push({url:u,evidence:"enlace específico a vídeo del mismo medio; relevancia por ruta/titular"});
+                }
+                for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
+                  const el = m[0];
+                  const key = (attr(el,"property") + " " + attr(el,"name") + " " + attr(el,"itemprop")).toLowerCase();
+                  if (/video|content_url|embedurl/.test(key)) addVideo(attr(el,"content"), "metadato de vídeo: " + key.trim(), true);
+                }
+                for (const m of html.matchAll(/<script\b[^>]*type\s*=\s*(['"])application\/ld\+json\1[^>]*>([\s\S]*?)<\/script>/gi)) {
+                  const jsonText = decode(m[2]);
+                  if (/VideoObject/i.test(jsonText)) {
+                    const urls = jsonText.match(/https?:\\?\/\\?\/[^"'\\\s]+/g) || [];
+                    for (const raw of urls) addVideo(raw.replace(/\\\//g,"/"), "JSON-LD VideoObject", true);
+                  }
+                }
+                story.videos = [...new Map([...evidence, ...story.rssVideos].map(v => [v.url,v])).values()].slice(0,8);
+                story.pageText = textOf(html).slice(0,12000);
+                if (story.videos.length) story.pageStatus = "vídeo detectado en reproductor/metadatos";
+                else if (/\b(video|vídeo|reproductor|player|youtube|vimeo)\b/i.test(html)) story.pageStatus = "señal de vídeo, enlace del reproductor no confirmado";
+                else story.pageStatus = "no se detectó reproductor de vídeo específico";
+              } catch (e) {
+                story.pageStatus = "error al abrir página: " + e.message;
+                story.reason = e.message;
+              }
+            }
+            for (const s of sourceResults) {
+              s.inspected = inspectQueue.filter(x => x.source === s.name && x.pageChecked).length;
+              s.embeds = inspectQueue.filter(x => x.source === s.name && x.videos.length > 0).length;
+            }
+            const now = Date.now();
+            const isRecent = s => Number.isFinite(s.dateMs) && s.dateMs <= now + 3*3600000 && s.dateMs >= now - 72*3600000;
+            const decision = [];
+            for (const story of inspectQueue) {
+              const dateOk = isRecent(story);
+              const actualVideo = story.videos.length > 0;
+              const peers = allIndex.filter(other => other.source !== story.source && other.url && isRecent(other) && Number.isFinite(other.dateMs) && Math.abs(other.dateMs-story.dateMs) <= 48*3600000 && similarity(story.title, other.title).match);
+              const peerEvidence = peers.map(p => ({source:p.source,title:p.title,url:p.url,published:p.published}));
+              const eventWords = [...new Set(cleanTokens(story.title))];
+              const pageTitleTokens = new Set(cleanTokens(story.pageTitle));
+              const pageTitleOverlap = eventWords.filter(w => pageTitleTokens.has(w)).length;
+              const pageTitleMatches = pageTitleOverlap >= 2;
+              let status, reason;
+              if (!story.pageChecked) {
+                status = "RECHAZADO";
+                reason = "No se pudo abrir la página del artículo; no se puede verificar el contexto ni el reproductor.";
+              } else if (!dateOk) {
+                status = "RECHAZADO";
+                reason = "Fecha ausente, inválida, demasiado antigua o demasiado futura para esta prueba (ventana: últimas 72 h; tolerancia futura: 3 h).";
+              } else if (!actualVideo) {
+                status = "RECHAZADO";
+                reason = "No se encontró un enlace específico en iframe/video/source o metadatos de vídeo; una palabra o enlace genérico no basta.";
+              } else if (pageTitleMatches) {
+                status = "CONFIRMADO (fuente editorial fiable)";
+                reason = "La noticia procede de una fuente editorial de confianza incluida en la lista aprobada (DW Español, BBC Mundo o France 24 Español); la página está accesible, la fecha es reciente, el título de la página coincide y se detectó un enlace específico o metadato de vídeo. No se exige una segunda fuente para este filtro. Antes de publicar, aún debe comprobarse que el vídeo corresponde al hecho y que su uso está permitido.";
+              } else {
+                status = "NECESITA VERIFICACIÓN";
+                reason = "La fuente principal puede ser fiable, pero el título de la página no coincide suficientemente con el titular RSS; revisar redirecciones, página incorrecta o metadatos. No se exige una segunda fuente solo para duplicar la noticia.";
+              }
+              decision.push({...story,status,reason,peerEvidence});
+            }
+            // Deduplicación editorial: una misma noticia/vídeo no debe ocupar dos plazas.
+            // Canonicaliza los IDs de YouTube y compara también los titulares.
+            const videoKey = raw => {
+              try {
+                const u = new URL(raw);
+                const h = u.hostname.toLowerCase();
+                if (h === "youtu.be") return "youtube:" + u.pathname.split("/").filter(Boolean)[0];
+                if (h === "youtube.com" || h.endsWith(".youtube.com")) {
+                  const id = u.searchParams.get("v") || u.pathname.match(/^\/(?:shorts|embed|live)\/([^/?]+)/i)?.[1];
+                  if (id) return "youtube:" + id;
+                }
+                if ((h === "vimeo.com" || h.endsWith(".vimeo.com")) && /\/(?:video\/)?\d+/.test(u.pathname)) return "vimeo:" + u.pathname.match(/\d+/)?.[0];
+                return u.href.replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase();
+              } catch { return String(raw || "").trim().toLowerCase(); }
+            };
+            const confirmedRaw = decision.filter(s => s.status === "CONFIRMADO (fuente editorial fiable)");
+            const confirmed = [];
+            const duplicateStories = [];
+            for (const story of confirmedRaw) {
+              const keys = new Set(story.videos.map(v => videoKey(v.url)));
+              const duplicate = confirmed.find(prior => {
+                const priorKeys = new Set(prior.videos.map(v => videoKey(v.url)));
+                const sameVideo = [...keys].some(k => k && priorKeys.has(k));
+                const sameStory = similarity(story.title, prior.title).match;
+                return sameVideo || sameStory;
+              });
+              if (duplicate) {
+                duplicateStories.push({ title: story.title, url: story.url, duplicateOf: duplicate.url });
+              } else {
+                confirmed.push(story);
+              }
+            }
+                        // Verificación final automatizada de metadatos: el título del vídeo debe concordar con la noticia
+            // y el canal debe corresponder a la fuente editorial. Esto NO concede derechos de reutilización.
+            const publisherAliases = {
+              "France 24 Español": ["france 24"],
+              "DW Español": ["dw"],
+              "BBC Mundo": ["bbc"]
+            };
+            const verifyFinalVideo = async story => {
+              const checks = [];
+              for (const video of story.videos.slice(0, 5)) {
+                try {
+                  const u = new URL(video.url);
+                  const host = u.hostname.toLowerCase();
+                  const isYoutube = host === "youtu.be" || host === "youtube.com" || host.endsWith(".youtube.com");
+                  if (isYoutube) {
+                    const id = host === "youtu.be"
+                      ? u.pathname.split("/").filter(Boolean)[0]
+                      : (u.searchParams.get("v") || u.pathname.match(/^\/(?:shorts|embed|live)\/([^/?]+)/i)?.[1]);
+                    if (!id) {
+                      checks.push({url:video.url,ok:false,reason:"No se pudo identificar un ID concreto de YouTube."});
+                      continue;
+                    }
+                    const oembedUrl = "https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id);
+                    const res = await fetch(oembedUrl,{headers,signal:AbortSignal.timeout(6000),redirect:"follow"});
+                    if (!res.ok) {
+                      checks.push({url:video.url,ok:false,reason:"YouTube no devolvió metadatos accesibles (HTTP " + res.status + ")."});
+                      continue;
+                    }
+                    const meta = await res.json();
+                    const titleTokens = new Set(cleanTokens(meta.title || ""));
+                    const storyTokens = new Set(cleanTokens(story.title));
+                    const overlap = [...storyTokens].filter(w => titleTokens.has(w));
+                    const ratio = overlap.length / Math.max(1,Math.min(storyTokens.size,titleTokens.size));
+                    const titleOk = overlap.length >= 2 && ratio >= 0.30;
+                    const aliases = publisherAliases[story.source] || [];
+                    const author = String(meta.author_name || "").toLowerCase();
+                    const channelOk = aliases.some(alias => author.includes(alias));
+                    const ok = titleOk && channelOk;
+                    checks.push({
+                      url:video.url,ok,videoTitle:meta.title || "",channel:meta.author_name || "",
+                      reason:!titleOk ? "El título de YouTube no coincide suficientemente con la noticia (" + overlap.length + " palabras compartidas)." :
+                        !channelOk ? "El canal de YouTube no coincide con la fuente editorial esperada." :
+                        "Metadatos de vídeo accesibles; título y canal concuerdan con la noticia y la fuente."
+                    });
+                  } else {
+                    const officialHost =
+                      (story.source === "France 24 Español" && (host === "france24.com" || host.endsWith(".france24.com")) ) ||
+                      (story.source === "DW Español" && (host === "dw.com" || host.endsWith(".dw.com"))) ||
+                      (story.source === "BBC Mundo" && (host === "bbc.com" || host.endsWith(".bbc.com") || host === "bbc.co.uk" || host.endsWith(".bbc.co.uk")));
+                    checks.push({
+                      url:video.url,ok:false,
+                      reason:officialHost
+                        ? "Vídeo del medio original: requiere comprobación editorial manual y debe compartirse mediante el reproductor/enlace oficial; no se autoriza descargarlo ni re-subirlo."
+                        : "El vídeo no ofrece metadatos de canal/título verificables con este control; requiere revisión manual."
+                    });
+                  }
+                } catch (e) {
+                  checks.push({url:video.url,ok:false,reason:"Falló la consulta de metadatos: " + e.message});
+                }
+              }
+              const passed = checks.some(c => c.ok);
+              return {
+                passed,
+                checks,
+                summary: passed
+                  ? "SUPERÓ el control automatizado de metadatos; los derechos de uso siguen sin estar verificados."
+                  : "NO SUPERÓ la verificación final automatizada; no debe avanzar a publicación."
+              };
+            };
+            for (const story of confirmed) {
+              story.finalVerification = await verifyFinalVideo(story);
+              core.info("VERIFICACIÓN FINAL | " + story.title + " | " + story.finalVerification.summary);
+              for (const check of story.finalVerification.checks) {
+                core.info("DETALLE VÍDEO | " + check.url + " | " + (check.ok ? "PASS" : "BLOCK") + " | " + check.reason +
+                  (check.videoTitle ? " | título: " + check.videoTitle : "") +
+                  (check.channel ? " | canal: " + check.channel : ""));
+              }
+            }
+            
+            core.info("Deduplicación: " + confirmedRaw.length + " candidatos confirmados; " + duplicateStories.length + " duplicados excluidos.");
+            for (const d of duplicateStories) core.info("DUPLICADO EXCLUIDO | " + d.title + " | " + d.url + " | duplicado de " + d.duplicateOf);
+            // Prioriza los candidatos distintos más recientes; máximo dos por ejecución.
+            // Esto solo crea una lista para revisión: no aprueba derechos ni publica contenido.
+            confirmed.sort((a, b) => (b.dateMs || 0) - (a.dateMs || 0));
+            const selected = confirmed.filter(s => s.finalVerification && s.finalVerification.passed).slice(0, 2);
+            const finalBlocked = confirmed.filter(s => !s.finalVerification || !s.finalVerification.passed);
+            const review = decision.filter(s => s.status === "NECESITA VERIFICACIÓN");
+            const rejected = decision.filter(s => s.status === "RECHAZADO");
+            core.summary.addHeading("Mundo al Día — verificación de vídeos (DRY RUN)");
+            core.summary.addRaw("MODO SOLO PRUEBA: no publica en el sitio, Railway, Facebook ni Instagram; no descarga ni vuelve a subir vídeos. “Confirmado (fuente editorial fiable)” significa que una fuente aprobada publicó la noticia y se detectaron página accesible, fecha reciente, título coherente y vídeo específico. No exige una segunda fuente para duplicar la noticia, pero no garantiza que cada detalle o que el vídeo concreto sea correcto ni confirma derechos de reutilización. Revisión editorial del vídeo y de su uso antes de publicar.\n\n");
+            core.summary.addHeading("Estado de las fuentes",2);
+            core.summary.addTable([
+              [{data:"Fuente",header:true},{data:"Estado",header:true},{data:"Entradas RSS",header:true},{data:"Páginas abiertas",header:true},{data:"Páginas con reproductor/metadatos",header:true}],
+              ...sourceResults.map(s => [s.name,s.ok?"OK":"ERROR",String(s.count),String(s.inspected),String(s.embeds)])
+            ]);
+            const renderTable = (items, title) => {
+              core.summary.addHeading(title,2);
+              if (!items.length) { core.summary.addRaw("No hay resultados en esta categoría.\n\n"); return; }
+              core.summary.addTable([
+                [{data:"Titular RSS",header:true},{data:"Fuente principal",header:true},{data:"Fecha RSS",header:true},{data:"Estado de página/título",header:true},{data:"Enlace del artículo",header:true},{data:"Vídeo y evidencia",header:true},{data:"Fuente independiente / motivo",header:true}],
+                ...items.slice(0,25).map(s => [
+                  s.title,
+                  s.source,
+                  s.published || "fecha ausente",
+                  (s.pageStatus || "") + (s.pageTitle ? " | título página: " + s.pageTitle.slice(0,180) : "") + (s.httpStatus ? " | HTTP " + s.httpStatus : "") + (s.finalUrl ? " | final " + s.finalUrl : ""),
+                  s.url || "sin URL",
+                  s.videos.length ? s.videos.map(v => v.url + " (" + v.evidence + ")").join(" ; ") : "ningún enlace específico confirmado",
+                  (s.peerEvidence.length ? s.peerEvidence.map(p => p.source + ": " + p.title + " [" + p.url + "]").join(" ; ") : "") + (s.peerEvidence.length ? " | " : "") + s.reason
+                ])
+              ]);
+            };
+            core.summary.addHeading("1. VERIFICACIÓN FINAL AUTOMATIZADA",2);
+            core.summary.addRaw("El filtro comprueba metadatos del vídeo (título y canal) cuando el proveedor los expone. Un PASS NO confirma por sí solo que cada detalle del vídeo sea correcto ni concede derechos de reutilización. Si el control falla, el candidato queda bloqueado. Ningún candidato se publica desde este workflow.\n\n");
+            if (confirmed.length) {
+              core.summary.addTable([
+                [{data:"Titular de la noticia",header:true},{data:"Resultado final",header:true},{data:"Evidencia de vídeo",header:true}],
+                ...confirmed.map(s => [s.title, s.finalVerification ? s.finalVerification.summary : "BLOQUEADO: no se pudo verificar", (s.finalVerification?.checks || []).map(c => (c.ok ? "PASS" : "BLOCK") + ": " + c.reason + (c.videoTitle ? " | título: " + c.videoTitle : "") + (c.channel ? " | canal: " + c.channel : "")).join(" ; ")])
+              ]);
+            } else {
+              core.summary.addRaw("No hay candidatos confirmados para ejecutar la verificación final.\n\n");
+            }
+            core.summary.addHeading("2. DOS CANDIDATOS PRIORIZADOS — no publicados",2);
+            core.summary.addRaw("Se eligen como máximo dos noticias distintas por ejecución, priorizando las más recientes. Antes de publicar, una persona debe abrir el vídeo, confirmar que corresponde al hecho, revisar contexto y fecha, comprobar licencia/permisos o usar el enlace/embed oficial del medio. Si no hay dos candidatos válidos, el sistema no rellena los espacios con noticias débiles.\n\n");
+            if (!selected.length) {
+              core.summary.addRaw("No hay candidatos que superen todos los filtros; no se recomienda publicar ningún vídeo.\n\n");
+            } else {
+              core.summary.addTable([
+                [{data:"Prioridad",header:true},{data:"Titular",header:true},{data:"Fuente",header:true},{data:"Fecha",header:true},{data:"Artículo fuente",header:true},{data:"Vídeo detectado",header:true},{data:"Revisión obligatoria",header:true}],
+                ...selected.map((s,i) => [
+                  String(i+1), s.title, s.source, s.published || "fecha ausente",
+                  s.url || "sin URL",
+                  s.videos.map(v => v.url + " (" + v.evidence + ")").join(" ; "),
+                  "Confirmar vídeo y derechos; si no se confirma, no publicar"
+                ])
+              ]);
+            }
+            renderTable(confirmed,"2. TODOS LOS CANDIDATOS CONFIRMADOS POR FUENTE EDITORIAL");
+            renderTable(review,"3. NECESITAN VERIFICACIÓN");
+            renderTable(rejected,"4. RECHAZADOS POR LOS FILTROS DE ESTA PRUEBA");
+            core.summary.addRaw("\nCobertura: se indexan las entradas RSS devueltas por las fuentes, pero solo se abren como máximo 8 páginas por fuente en este ensayo. Las fuentes aprobadas (DW Español, BBC Mundo y France 24 Español) se consideran fuentes editoriales principales: no se exige que otra fuente repita la noticia. Los filtros aún comprueban accesibilidad de página, fecha, coincidencia del título y evidencia de un vídeo específico. “Rechazado” significa que el candidato no superó los filtros técnicos de esta prueba, no que la noticia sea falsa. Ninguna decisión autoriza publicación automática.\n");
+            await core.summary.write();
+            for (const [i, s] of selected.entries()) {
+              core.info("SELECCIÓN PARA REVISIÓN #" + (i+1) + " | " + s.source + " | " + s.published + " | " + s.title + " | ARTÍCULO: " + s.url + " | VÍDEO: " + s.videos.map(v => v.url).join(" ; ") + " | DERECHOS: revisión humana pendiente");
+            }
+            core.info("Dry run completado: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas por fuente editorial; " + selected.length + " superaron metadatos y se priorizan para revisión humana; " + finalBlocked.length + " bloqueadas por la verificación final; " + review.length + " necesitan verificación; " + rejected.length + " rechazadas por filtros. No se publicó contenido.");
+            if (sourceResults.every(s => !s.ok)) core.setFailed("Ninguna fuente RSS respondió correctamente.");

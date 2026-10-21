@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   publish-alamodome:
+    # Seguridad: este flujo solo puede publicar desde main; en la rama de pruebas queda desactivado.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
