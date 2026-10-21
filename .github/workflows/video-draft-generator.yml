@@ -1,0 +1,60 @@
+name: Crear borrador de vídeo original — Mundo al Día
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: "Titular revisado por una persona"
+        required: true
+        type: string
+      summary:
+        description: "Resumen verificado (60–1200 caracteres)"
+        required: true
+        type: string
+      narration:
+        description: "Narración en español ya revisada (100–2600 caracteres)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  create-draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar herramientas locales de creación
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg espeak-ng
+          python -m pip install --upgrade pip
+          python -m pip install pillow
+
+      - name: Crear vídeo original en español
+        env:
+          STORY_TITLE: ${{ inputs.title }}
+          STORY_SUMMARY: ${{ inputs.summary }}
+          STORY_NARRATION: ${{ inputs.narration }}
+        run: |
+          python scripts/create_video_draft.py \
+            --title "$STORY_TITLE" \
+            --summary "$STORY_SUMMARY" \
+            --narration "$STORY_NARRATION"
+
+      - name: Comprobar el archivo MP4
+        run: |
+          test -s video-draft-output/mundo-al-dia-video-original.mp4
+          ffprobe -v error -show_entries format=duration,size \
+            -of default=noprint_wrappers=1 video-draft-output/mundo-al-dia-video-original.mp4
+
+      - name: Guardar borrador como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: mundo-al-dia-video-original-draft
+          path: video-draft-output/
+          if-no-files-found: error
+          retention-days: 7
