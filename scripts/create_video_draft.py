@@ -129,8 +129,16 @@ def main():
         raise SystemExit("La narración debe tener entre 100 y 2600 caracteres.")
 
     OUT.mkdir(parents=True, exist_ok=True)
-    audio = OUT / "narracion_es.wav"
-    run(["espeak-ng", "-v", "es", "-s", "145", "-p", "48", "-w", str(audio), narration])
+    # Microsoft Edge neural TTS produces a more natural Spanish voice than espeak.
+    # This draft generator uses a neural Spanish voice, without requiring a paid API key.
+    audio = OUT / "narracion_es.mp3"
+    run([
+        "edge-tts",
+        "--voice", "es-MX-JorgeNeural",
+        "--rate=-5%",
+        "--text", narration,
+        "--write-media", str(audio),
+    ])
     probe = subprocess.check_output([
         "ffprobe", "-v", "error", "-show_entries", "format=duration",
         "-of", "default=noprint_wrappers=1:nokey=1", str(audio)
