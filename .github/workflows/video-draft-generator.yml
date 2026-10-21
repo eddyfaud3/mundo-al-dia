@@ -185,7 +185,8 @@ jobs:
           if not result.get("facebook", {}).get("published") or not result.get("instagram", {}).get("published"):
               raise SystemExit("La publicación en ambas redes no quedó confirmada.")
           PY
-\n      - name: Guardar borrador como artefacto
+
+      - name: Guardar borrador como artefacto
         uses: actions/upload-artifact@v4
         with:
           name: mundo-al-dia-video-original-draft
