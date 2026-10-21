@@ -6,7 +6,7 @@ import { publishVideoToFacebook, publishVideoToInstagram } from "../../../../lib
 export const runtime = "nodejs";
 
 function authorized(request) {
-  const expected = process.env.AUTOMATION_PUBLISH_SECRET || "";
+  const expected = process.env.AUTOMATION_PUBLISH_SECRET || process.env.MUNDO_AL_DIA_AUTOMATION_SECRET || "";
   const supplied = request.headers.get("authorization") || "";
   if (!expected || !supplied.startsWith("Bearer ")) return false;
 
