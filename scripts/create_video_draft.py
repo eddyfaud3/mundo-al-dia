@@ -8,6 +8,8 @@ import re
 import subprocess
 import textwrap
 import json
+import hashlib
+from html.parser import HTMLParser
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -25,72 +27,144 @@ PHOTO_PATHS = []
 PHOTO_CREDITS = []
 
 
-def download_verified_commons_photo(out_dir, search_query, filename, required_any, forbidden_any=()):
-    """Download a real Commons photo only when its file title matches the scene topic and license metadata."""
-    api = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode({
-        "action": "query", "format": "json", "generator": "search",
-        "gsrsearch": "file:" + search_query, "gsrnamespace": 6,
-        "gsrlimit": 15, "prop": "imageinfo", "iiprop": "url|extmetadata",
-        "iiurlwidth": 1400,
-    })
-    req = urllib.request.Request(api, headers={"User-Agent": "MundoAlDiaDraftGenerator/1.0 (editorial test)"})
-    with urllib.request.urlopen(req, timeout=25) as response:
-        data = json.loads(response.read().decode("utf-8"))
-    pages = (data.get("query", {}).get("pages", {}) or {}).values()
-    accepted = {"public domain", "cc0", "cc by 4.0", "cc by 3.0", "cc by 2.0", "cc by 1.0", "cc by-sa 4.0", "cc by-sa 3.0", "cc by-sa 2.0", "cc by-sa 1.0"}
-    for page in pages:
-        info = (page.get("imageinfo") or [{}])[0]
-        meta = info.get("extmetadata", {})
-        license_name = (meta.get("LicenseShortName", {}).get("value", "") or "").strip()
-        license_lower = license_name.lower()
-        if not any(term in license_lower for term in accepted):
-            continue
-        image_url = info.get("thumburl") or info.get("url")
-        if not image_url:
-            continue
-        title = page.get("title", "Wikimedia Commons image")
-        title_normalized = re.sub(r"[^a-z0-9 ]", " ", title.lower().replace("_", " "))
-        # Reject scans, screenshots, portraits, and known off-topic subjects by file title.
-        # The title must contain a scene-specific phrase; vague matches are not accepted.
-        if title.lower().endswith((".pdf", ".djvu", ".svg")):
-            continue
-        if any(term in title_normalized for term in forbidden_any):
-            continue
-        if not any(term in title_normalized for term in required_any):
-            continue
-        mime = (meta.get("MIMEType", {}).get("value", "") or "").lower()
-        if mime and not mime.startswith("image/"):
-            continue
-        artist = meta.get("Artist", {}).get("value", "Author not listed")
-        credit = re.sub(r"<[^>]+>", "", artist).strip()
-        page_url = "https://commons.wikimedia.org/wiki/" + urllib.parse.quote(title.replace(" ", "_"), safe="/:()")
-        out_path = out_dir / filename
-        request = urllib.request.Request(image_url, headers={"User-Agent": "MundoAlDiaDraftGenerator/1.0 (editorial test)"})
-        with urllib.request.urlopen(request, timeout=30) as response, out_path.open("wb") as target:
-            target.write(response.read())
-        return {
-            "path": out_path,
-            "file": title,
-            "source": page_url,
-            "license": license_name,
-            "credit": credit or "No indicado",
-            "search": search_query,
-        }
-    raise RuntimeError(f"No se encontró una foto pertinente con licencia aceptada para: {search_query}")
+class ArticleImageParser(HTMLParser):
+    """Collect editorial images declared by the article page, prioritizing its social preview."""
+    def __init__(self):
+        super().__init__()
+        self.images = []
+        self.in_article = 0
 
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "article":
+            self.in_article += 1
+        if tag == "meta":
+            key = (attrs.get("property") or attrs.get("name") or "").lower()
+            if key in ("og:image", "og:image:url", "twitter:image", "twitter:image:src"):
+                self.images.append((attrs.get("content", ""), True))
+        elif tag == "img":
+            src = attrs.get("src") or attrs.get("data-src") or attrs.get("data-original") or ""
+            srcset = attrs.get("srcset") or attrs.get("data-srcset") or ""
+            candidates = []
+            if src:
+                candidates.append(src)
+            for item in srcset.split(","):
+                url = item.strip().split(" ")[0] if item.strip() else ""
+                if url:
+                    candidates.append(url)
+            for candidate in candidates:
+                self.images.append((candidate, bool(self.in_article)))
+
+    def handle_endtag(self, tag):
+        if tag == "article" and self.in_article:
+            self.in_article -= 1
+
+
+def download_article_images(out_dir, article_url, max_images=6):
+    """Download images embedded in the exact source article for an unpublished draft.
+    This does not grant reuse rights; the manifest clearly flags that editorial rights review is required.
+    """
+    parsed = urllib.parse.urlparse(article_url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise RuntimeError("La fuente debe ser una URL HTTPS válida del artículo original.")
+    req = urllib.request.Request(article_url, headers={
+        "User-Agent": "Mozilla/5.0 (compatible; MundoAlDiaDraftGenerator/1.0)",
+        "Accept": "text/html,application/xhtml+xml",
+    })
+    with urllib.request.urlopen(req, timeout=30) as response:
+        final_url = response.geturl()
+        content_type = response.headers.get("Content-Type", "").lower()
+        if "html" not in content_type:
+            raise RuntimeError("La URL de la fuente no devolvió una página HTML de artículo.")
+        html = response.read(5_000_000).decode("utf-8", errors="replace")
+    parser = ArticleImageParser()
+    parser.feed(html)
+
+    candidates = []
+    seen = set()
+    for raw_url, preferred in parser.images:
+        if not raw_url:
+            continue
+        url = urllib.parse.urljoin(final_url, raw_url.strip())
+        p = urllib.parse.urlparse(url)
+        if p.scheme not in ("https", "http") or not p.netloc:
+            continue
+        lower = url.lower()
+        if any(word in lower for word in ("logo", "avatar", "icon", "favicon", "sprite", "tracking", "pixel", "placeholder", "blank.gif")):
+            continue
+        if url in seen:
+            continue
+        seen.add(url)
+        candidates.append((url, preferred))
+    candidates.sort(key=lambda item: not item[1])
+
+    credits = []
+    for url, _preferred in candidates:
+        if len(credits) >= max_images:
+            break
+        try:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; MundoAlDiaDraftGenerator/1.0)",
+                "Referer": final_url,
+            })
+            with urllib.request.urlopen(req, timeout=25) as response:
+                mime = (response.headers.get("Content-Type") or "").lower()
+                raw = response.read(12_000_000)
+            if not mime.startswith("image/"):
+                continue
+            suffix = ".jpg"
+            if "png" in mime:
+                suffix = ".png"
+            elif "webp" in mime:
+                suffix = ".webp"
+            elif "gif" in mime:
+                suffix = ".gif"
+            digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:12]
+            path = out_dir / f"foto_fuente_{digest}{suffix}"
+            path.write_bytes(raw)
+            try:
+                with Image.open(path) as image:
+                    image.verify()
+                with Image.open(path) as image:
+                    width, height = image.size
+                if width < 500 or height < 280:
+                    path.unlink(missing_ok=True)
+                    continue
+            except Exception:
+                path.unlink(missing_ok=True)
+                continue
+            credits.append({
+                "path": path,
+                "file": url,
+                "source": url,
+                "article": final_url,
+                "license": "No verificada automáticamente; requiere autorización/licencia antes de publicar",
+                "credit": "Consultar crédito indicado en el artículo original",
+                "search": "Imagen extraída de la misma página de noticia",
+            })
+        except Exception:
+            continue
+    if not credits:
+        raise RuntimeError(
+            "No se pudieron extraer imágenes editoriales de la página original. "
+            "No se usarán fotos de otra fuente para evitar imágenes que no correspondan."
+        )
+    return credits
 
 def save_photo_credits(out_dir, credits):
     lines = [
-        "FUENTES Y LICENCIAS DE FOTOGRAFÍAS — borrador no publicado.",
-        "Las imágenes son fotos reales de contexto; comprobar pertinencia visual antes de publicar.",
+        "IMÁGENES DEL ARTÍCULO ORIGINAL — borrador no publicado.",
+        "Las imágenes se extrajeron de la misma página de noticia para mejorar la pertinencia.",
+        "IMPORTANTE: extraer una imagen no concede derechos de reutilización. Verificar licencia/permisos antes de publicar.",
         "",
     ]
     for i, item in enumerate(credits, 1):
         lines.extend([
-            f"Escena {i}: {item['search']}",
-            f"Archivo: {item['file']}",
-            f"Fuente: {item['source']}",
-            f"Licencia declarada: {item['license']}",
+            f"Imagen {i}: {item['search']}",
+            f"URL de imagen: {item['file']}",
+            f"Artículo fuente: {item.get('article', item['source'])}",
+            f"Fuente de imagen: {item['source']}",
+            f"Licencia/permiso: {item['license']}",
             f"Autor/crédito: {item['credit']}",
             "",
         ])
@@ -226,6 +300,7 @@ def main():
     ap.add_argument("--title", required=True)
     ap.add_argument("--summary", required=True)
     ap.add_argument("--narration", required=True)
+    ap.add_argument("--source-url", required=True, help="URL HTTPS del artículo original que contiene las imágenes")
     args = ap.parse_args()
     title = args.title.strip()
     summary = args.summary.strip()
@@ -238,37 +313,27 @@ def main():
         raise SystemExit("La narración debe tener entre 100 y 2600 caracteres.")
     OUT.mkdir(parents=True, exist_ok=True)
     global PHOTO_PATHS, PHOTO_CREDITS
-    # Each photo must match the scene subject by its actual Commons file title.
-    # If no licensed, relevant image is found, fail the draft rather than use a misleading photo.
-    photo_specs = [
-        ("White House", "foto_casa_blanca.jpg",
-         ["white house"],
-         ["barack obama", "malcolm turnbull", "portrait", "inside", "interior", "meeting", "document", "screenshot", "computer", "logo", "seal", "flag", "model"]),
-        ("Abbas Araghchi", "foto_reunion_diplomatica.jpg",
-         ["abbas araghchi", "araghchi"],
-         ["document", "screenshot", "webpage", "computer screen", "logo", "flag only", "cartoon", "illustration"]),
-        # Commons search is inconsistent for long location-specific phrases; search a
-        # broad vessel term, then require "tanker" in the actual file title.
-        ("oil tanker", "foto_estrecho_hormuz.jpg",
-         ["tanker"],
-         ["document", "screenshot", "webpage", "computer screen", "diagram", "map", "model ship", "toy ship", "oil platform", "gas station"]),
-    ]
-    PHOTO_CREDITS = [
-        download_verified_commons_photo(OUT, query, filename, required_any, forbidden_any)
-        for query, filename, required_any, forbidden_any in photo_specs
-    ]
+    # Use only images found on the exact article page. Never silently substitute unrelated stock/context images.
+    PHOTO_CREDITS = download_article_images(OUT, args.source_url, max_images=6)
     PHOTO_PATHS = [item["path"] for item in PHOTO_CREDITS]
     save_photo_credits(OUT, PHOTO_CREDITS)
     voice = os.environ.get("MUNDO_AL_DIA_TTS_VOICE", "es-US-AlonsoNeural")
     rate = os.environ.get("MUNDO_AL_DIA_TTS_RATE", "-8%")
-    # Split narration into three matching voice/text segments. Each still uses the
-    # exact duration of its own generated speech; the end card starts after speech.
+    # Create one scene per available source-article image (up to six), plus the branded end card.
+    # If the article has only one usable image, make one editorial scene instead of forcing three images.
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", narration) if s.strip()]
-    if len(sentences) < 3:
-        sentences = split_narration(narration, 3)
-    groups = [[] for _ in range(3)]
-    for i, sentence in enumerate(sentences):
-        groups[min(2, int(i * 3 / len(sentences)))].append(sentence)
+    scene_count = max(1, len(PHOTO_PATHS))
+    groups = [[] for _ in range(scene_count)]
+    if len(sentences) < scene_count:
+        words = narration.split()
+        for i in range(scene_count):
+            start = round(i * len(words) / scene_count)
+            end = round((i + 1) * len(words) / scene_count)
+            if start < end:
+                groups[i].append(" ".join(words[start:end]))
+    else:
+        for i, sentence in enumerate(sentences):
+            groups[min(scene_count - 1, int(i * scene_count / len(sentences)))].append(sentence)
     narration_chunks = [" ".join(g).strip() for g in groups if g]
     audio_parts = []
     durations = []
@@ -318,7 +383,9 @@ def main():
     (OUT / "README.txt").write_text(
         "Borrador original de Mundo al Día.\n"
         f"Voz neural usada: {voice}; velocidad: {rate}; tono: -2 Hz.\n"
-        "Revisar FUENTE_Y_LICENCIA_FOTO.txt y confirmar pertinencia antes de publicar.\n"
+        f"Artículo original: {args.source_url}\n"
+        "Las imágenes provienen de la página del artículo; sus derechos NO están verificados automáticamente.\n"
+        "Revisar FUENTE_Y_LICENCIA_FOTO.txt y confirmar pertinencia visual y permisos antes de publicar.\n"
         "Este archivo NO se publicó en el sitio, Facebook ni Instagram.\n"
         "Revisión editorial humana requerida antes de cualquier publicación.\n",
         encoding="utf-8"
