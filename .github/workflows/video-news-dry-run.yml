@@ -129,7 +129,7 @@ jobs:
                     for (const raw of urls) addVideo(raw.replace(/\\\//g,"/"), "JSON-LD VideoObject");
                   }
                 }
-                story.videos = [...new Map(evidence.map(v => [v.url,v])).values()].slice(0,8);
+                story.videos = [...new Map([...evidence, ...story.rssVideos].map(v => [v.url,v])).values()].slice(0,8);
                 story.pageText = textOf(html).slice(0,12000);
                 if (story.videos.length) story.pageStatus = "vídeo detectado en reproductor/metadatos";
                 else if (/\b(video|vídeo|reproductor|player|youtube|vimeo)\b/i.test(html)) story.pageStatus = "señal de vídeo, enlace del reproductor no confirmado";
