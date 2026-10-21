@@ -50,7 +50,11 @@ def download_verified_commons_photo(out_dir, search_query, filename, required_an
             continue
         title = page.get("title", "Wikimedia Commons image")
         title_normalized = re.sub(r"[^a-z0-9 ]", " ", title.lower().replace("_", " "))
-        if not any(term in title_normalized for term in required_any):
+        # Reject PDF/document scans and require subject-specific words in the actual file title.
+        if title.lower().endswith(".pdf") or not any(term in title_normalized for term in required_any):
+            continue
+        mime = (meta.get("MIMEType", {}).get("value", "") or "").lower()
+        if mime and not mime.startswith("image/"):
             continue
         artist = meta.get("Artist", {}).get("value", "Author not listed")
         credit = re.sub(r"<[^>]+>", "", artist).strip()
@@ -232,9 +236,9 @@ def main():
     # Each photo must match the scene subject by its actual Commons file title.
     # If no licensed, relevant image is found, fail the draft rather than use a misleading photo.
     photo_specs = [
-        ("White House exterior North Portico building", "foto_casa_blanca.jpg", ["white house", "whitehouse", "north portico"]),
-        ("Iran foreign minister Abbas Araghchi diplomatic meeting", "foto_reunion_diplomatica.jpg", ["araghchi", "iran", "foreign minister", "diplomatic meeting"]),
-        ("oil tanker cargo ship Strait of Hormuz shipping", "foto_estrecho_hormuz.jpg", ["tanker", "hormuz", "cargo ship", "oil terminal"]),
+        ("White House exterior building lawn", "foto_casa_blanca.jpg", ["white house exterior", "white house south lawn", "white house north portico exterior"]),
+        ("Iran foreign minister Abbas Araghchi diplomatic meeting", "foto_reunion_diplomatica.jpg", ["araghchi", "iranian diplomatic team", "iran foreign minister"]),
+        ("oil tanker cargo ship Strait of Hormuz shipping", "foto_estrecho_hormuz.jpg", ["oil tanker", "oil tanker ship", "cargo ship strait of hormuz", "tanker strait of hormuz"]),
     ]
     PHOTO_CREDITS = [download_verified_commons_photo(OUT, query, filename, required_any) for query, filename, required_any in photo_specs]
     PHOTO_PATHS = [item["path"] for item in PHOTO_CREDITS]
