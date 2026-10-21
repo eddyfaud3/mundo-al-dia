@@ -104,7 +104,7 @@ def font(size, bold=False):
 
 
 def wrap_by_pixels(draw, text, fnt, max_width):
-    words = re.sub(r"\\s+", " ", text.strip()).split()
+    words = re.sub(r"\s+", " ", text.strip()).split()
     lines, line = [], ""
     for word in words:
         trial = (line + " " + word).strip()
