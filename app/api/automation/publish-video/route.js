@@ -42,6 +42,7 @@ export async function POST(request) {
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const caption = typeof body.caption === "string" ? body.caption.trim() : title;
   const videoUrl = typeof body.video_url === "string" ? body.video_url.trim() : "";
+  const sourceUrl = typeof body.source_url === "string" ? body.source_url.trim() : "";
   const runId = String(body.run_id || Date.now().toString(36)).trim();
 
   if (!title || title.length > 220 || !caption || caption.length > 1200) {
@@ -49,6 +50,7 @@ export async function POST(request) {
   }
   try {
     if (new URL(videoUrl).protocol !== "https:") throw new Error();
+    if (sourceUrl && new URL(sourceUrl).protocol !== "https:") throw new Error();
   } catch {
     return NextResponse.json({ error: "La URL del vídeo debe ser HTTPS." }, { status: 400 });
   }
@@ -76,7 +78,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "Esta ejecución ya fue procesada; se evita duplicar la publicación." }, { status: 409 });
     }
 
-    const content = [caption, "", "Vídeo original de Mundo al Día."].join("\n");
+    const content = [caption, "", sourceUrl ? "Fuente original: " + sourceUrl : "", "", "Vídeo original de Mundo al Día."].filter(Boolean).join("\n");
     const inserted = await db.query(
       `INSERT INTO articles (title,slug,excerpt,content,image_url,video_url,category,published)
        VALUES ($1,$2,$3,$4,$5,$6,$7,true) RETURNING *`,
