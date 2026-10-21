@@ -277,5 +277,8 @@ jobs:
             renderTable(rejected,"3. RECHAZADOS POR LOS FILTROS DE ESTA PRUEBA");
             core.summary.addRaw("\nCobertura: se indexan las entradas RSS devueltas por las fuentes, pero solo se abren como máximo 8 páginas por fuente en este ensayo. Las fuentes aprobadas (DW Español, BBC Mundo y France 24 Español) se consideran fuentes editoriales principales: no se exige que otra fuente repita la noticia. Los filtros aún comprueban accesibilidad de página, fecha, coincidencia del título y evidencia de un vídeo específico. “Rechazado” significa que el candidato no superó los filtros técnicos de esta prueba, no que la noticia sea falsa. Ninguna decisión autoriza publicación automática.\n");
             await core.summary.write();
+            for (const s of confirmed) {
+              core.info("CANDIDATO CONFIRMADO | " + s.source + " | " + s.published + " | " + s.title + " | ARTÍCULO: " + s.url + " | VÍDEO: " + s.videos.map(v => v.url).join(" ; "));
+            }
             core.info("Dry run completado: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas por fuente editorial; " + review.length + " necesitan verificación; " + rejected.length + " rechazadas por filtros. No se publicó contenido.");
             if (sourceResults.every(s => !s.ok)) core.setFailed("Ninguna fuente RSS respondió correctamente.");
