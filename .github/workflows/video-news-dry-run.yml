@@ -237,12 +237,12 @@ jobs:
               } else if (!actualVideo) {
                 status = "RECHAZADO";
                 reason = "No se encontró un enlace específico en iframe/video/source o metadatos de vídeo; una palabra o enlace genérico no basta.";
-              } else if (peers.length > 0 && pageTitleMatches) {
-                status = "CONFIRMADO (preliminar)";
-                reason = "Página abierta + reproductor/metadatos de vídeo detectados + título de página coherente + al menos una noticia independiente con palabras clave de evento compartidas y fecha a menos de 48 h. Requiere revisión humana de hechos.";
+              } else if (pageTitleMatches) {
+                status = "CONFIRMADO (fuente editorial fiable)";
+                reason = "La noticia procede de una fuente editorial de confianza incluida en la lista aprobada (DW Español, BBC Mundo o France 24 Español); la página está accesible, la fecha es reciente, el título de la página coincide y se detectó un enlace específico o metadato de vídeo. No se exige una segunda fuente para este filtro. Antes de publicar, aún debe comprobarse que el vídeo corresponde al hecho y que su uso está permitido.";
               } else {
                 status = "NECESITA VERIFICACIÓN";
-                reason = !pageTitleMatches ? "El título de la página no coincide suficientemente con el titular RSS; revisar redirecciones o página incorrecta." : "Hay un posible vídeo, pero no se encontró una noticia independiente que coincida en evento y fecha dentro del índice RSS consultado.";
+                reason = "La fuente principal puede ser fiable, pero el título de la página no coincide suficientemente con el titular RSS; revisar redirecciones, página incorrecta o metadatos. No se exige una segunda fuente solo para duplicar la noticia.";
               }
               decision.push({...story,status,reason,peerEvidence});
             }
@@ -250,7 +250,7 @@ jobs:
             const review = decision.filter(s => s.status === "NECESITA VERIFICACIÓN");
             const rejected = decision.filter(s => s.status === "RECHAZADO");
             core.summary.addHeading("Mundo al Día — verificación de vídeos (DRY RUN)");
-            core.summary.addRaw("MODO SOLO PRUEBA: no publica en el sitio, Railway, Facebook ni Instagram; no descarga ni vuelve a subir vídeos. “Confirmado (preliminar)” significa que pasan filtros automáticos de enlace, página, fecha y coincidencia independiente por título/evento; NO equivale a una verificación periodística completa ni confirma derechos de reutilización. Revisión humana obligatoria antes de cualquier uso.\n\n");
+            core.summary.addRaw("MODO SOLO PRUEBA: no publica en el sitio, Railway, Facebook ni Instagram; no descarga ni vuelve a subir vídeos. “Confirmado (fuente editorial fiable)” significa que una fuente aprobada publicó la noticia y se detectaron página accesible, fecha reciente, título coherente y vídeo específico. No exige una segunda fuente para duplicar la noticia, pero no garantiza que cada detalle o que el vídeo concreto sea correcto ni confirma derechos de reutilización. Revisión editorial del vídeo y de su uso antes de publicar.\n\n");
             core.summary.addHeading("Estado de las fuentes",2);
             core.summary.addTable([
               [{data:"Fuente",header:true},{data:"Estado",header:true},{data:"Entradas RSS",header:true},{data:"Páginas abiertas",header:true},{data:"Páginas con reproductor/metadatos",header:true}],
@@ -275,7 +275,7 @@ jobs:
             renderTable(confirmed,"1. CONFIRMADOS PRELIMINARMENTE — revisión humana obligatoria");
             renderTable(review,"2. NECESITAN VERIFICACIÓN");
             renderTable(rejected,"3. RECHAZADOS POR LOS FILTROS DE ESTA PRUEBA");
-            core.summary.addRaw("\nCobertura: se indexan las entradas RSS devueltas por las fuentes, pero solo se abren como máximo 8 páginas por fuente en este ensayo. La corroboración independiente se busca en los titulares y fechas RSS de las otras fuentes disponibles; la comparación automática puede pasar por alto una noticia redactada de forma diferente o confundir coincidencias. “Rechazado” significa que el candidato no superó los filtros de esta prueba, no que la noticia sea falsa. Ninguna decisión autoriza publicación automática.\n");
+            core.summary.addRaw("\nCobertura: se indexan las entradas RSS devueltas por las fuentes, pero solo se abren como máximo 8 páginas por fuente en este ensayo. Las fuentes aprobadas (DW Español, BBC Mundo y France 24 Español) se consideran fuentes editoriales principales: no se exige que otra fuente repita la noticia. Los filtros aún comprueban accesibilidad de página, fecha, coincidencia del título y evidencia de un vídeo específico. “Rechazado” significa que el candidato no superó los filtros técnicos de esta prueba, no que la noticia sea falsa. Ninguna decisión autoriza publicación automática.\n");
             await core.summary.write();
             core.info("Dry run completado: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas preliminarmente; " + review.length + " necesitan verificación; " + rejected.length + " rechazadas por filtros. No se publicó contenido.");
             if (sourceResults.every(s => !s.ok)) core.setFailed("Ninguna fuente RSS respondió correctamente.");
