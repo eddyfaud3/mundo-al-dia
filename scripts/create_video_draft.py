@@ -229,33 +229,52 @@ def main():
     PHOTO_CREDITS = [download_verified_commons_photo(OUT, query, filename) for query, filename in photo_specs]
     PHOTO_PATHS = [item["path"] for item in PHOTO_CREDITS]
     save_photo_credits(OUT, PHOTO_CREDITS)
-    audio = OUT / "narracion_es.mp3"
     voice = os.environ.get("MUNDO_AL_DIA_TTS_VOICE", "es-US-AlonsoNeural")
     rate = os.environ.get("MUNDO_AL_DIA_TTS_RATE", "-8%")
-    # A second neural voice is tested on an isolated draft; this workflow never publishes.
-    run([
-        "edge-tts", "--voice", voice, f"--rate={rate}", "--pitch=-2Hz",
-        "--text", narration, "--write-media", str(audio),
-    ])
-    probe = subprocess.check_output([
-        "ffprobe", "-v", "error", "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1", str(audio)
-    ], text=True).strip()
-    audio_duration = float(probe)
-    narration_chunks = split_narration(narration, 3)
-    scene_bodies = [summary] + narration_chunks + ["Sigue a Mundo al Día para mantenerte informado."]
+    # Split narration into three matching voice/text segments. Each still uses the
+    # exact duration of its own generated speech; the end card starts after speech.
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", narration) if s.strip()]
+    if len(sentences) < 3:
+        sentences = split_narration(narration, 3)
+    groups = [[] for _ in range(3)]
+    for i, sentence in enumerate(sentences):
+        groups[min(2, int(i * 3 / len(sentences)))].append(sentence)
+    narration_chunks = [" ".join(g).strip() for g in groups if g]
+    audio_parts = []
+    durations = []
+    for i, chunk in enumerate(narration_chunks, 1):
+        part = OUT / f"voz_{i:02d}.mp3"
+        run(["edge-tts", "--voice", voice, f"--rate={rate}", "--pitch=-2Hz",
+             "--text", chunk, "--write-media", str(part)])
+        duration = float(subprocess.check_output([
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", str(part)
+        ], text=True).strip())
+        audio_parts.append(part)
+        durations.append(duration)
+    audio = OUT / "narracion_es.mp3"
+    audio_list = OUT / "audio_partes.txt"
+    with audio_list.open("w", encoding="utf-8") as f:
+        for part in audio_parts:
+            f.write(f"file '{part.resolve()}'\n")
+    run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat",
+         "-safe", "0", "-i", str(audio_list), "-c", "copy", str(audio)])
     scene_paths = []
-    for i, body in enumerate(scene_bodies):
-        p = OUT / f"escena_{i+1:02d}.png"
-        draw_scene(p, title, body, i + 1, len(scene_bodies), end_card=(i == len(scene_bodies) - 1))
+    for i, chunk in enumerate(narration_chunks, 1):
+        p = OUT / f"escena_{i:02d}.png"
+        draw_scene(p, title, chunk, i, len(narration_chunks) + 1, end_card=False)
         scene_paths.append(p)
-    main_duration = max(1.0, audio_duration / (len(scene_paths) - 1))
-    durations = [main_duration] * (len(scene_paths) - 1) + [2.0]
+    end_card_path = OUT / f"escena_{len(scene_paths)+1:02d}.png"
+    draw_scene(end_card_path, title, "El mundo, al día.", len(scene_paths)+1,
+               len(scene_paths)+1, end_card=True)
+    scene_paths.append(end_card_path)
     concat = OUT / "escenas.txt"
     with concat.open("w", encoding="utf-8") as f:
-        for p, dur in zip(scene_paths, durations):
+        for p, dur in zip(scene_paths[:-1], durations):
             f.write(f"file '{p.resolve()}'\n")
             f.write(f"duration {dur:.3f}\n")
+        f.write(f"file '{scene_paths[-1].resolve()}'\n")
+        f.write("duration 2.000\n")
         f.write(f"file '{scene_paths[-1].resolve()}'\n")
     video = OUT / "mundo-al-dia-video-original.mp4"
     run([
@@ -263,7 +282,8 @@ def main():
         "-f", "concat", "-safe", "0", "-i", str(concat), "-i", str(audio),
         "-vf", "fps=30,format=yuv420p", "-af", "apad=pad_dur=2",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-        "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", str(video)
+        "-c:a", "aac", "-b:a", "128k", "-t", f"{sum(durations)+2:.3f}",
+        "-movflags", "+faststart", str(video)
     ])
     (OUT / "README.txt").write_text(
         "Borrador original de Mundo al Día.\n"
