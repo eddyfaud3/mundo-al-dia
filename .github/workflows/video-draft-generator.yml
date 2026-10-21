@@ -46,9 +46,9 @@ jobs:
 
       - name: Crear vídeo original en español
         env:
-          STORY_TITLE: "${{ inputs.title || 'Prueba técnica: cómo verificar una noticia' }}"
-          STORY_SUMMARY: "${{ inputs.summary || 'Esta es una prueba técnica del generador de vídeo. No representa una noticia real ni contiene afirmaciones de actualidad. Sirve únicamente para comprobar que el sistema produce gráficos originales y una narración en español.' }}"
-          STORY_NARRATION: "${{ inputs.narration || 'Esta es una prueba técnica de Mundo al Día. El sistema crea gráficos originales y una voz sintética en español a partir de un texto de ejemplo. Este contenido no es una noticia real y no debe publicarse como información de actualidad. La publicación automática permanece desactivada.' }}"
+          STORY_TITLE: "${{ inputs.title || 'EE. UU. e Irán siguen sin acuerdo y aumenta la tensión en el estrecho de Ormuz' }}"
+          STORY_SUMMARY: "${{ inputs.summary || 'Los contactos entre Estados Unidos e Irán continúan estancados, mientras crece la preocupación por la seguridad marítima en el estrecho de Ormuz. Reuters informó el 21 de octubre de que los precios del petróleo subieron ante el temor a interrupciones del suministro en Oriente Medio. La situación sigue siendo cambiante y no existe un acuerdo definitivo.' }}"
+          STORY_NARRATION: "${{ inputs.narration || 'Las tensiones entre Estados Unidos e Irán continúan y las negociaciones siguen sin alcanzar un acuerdo definitivo. Según Reuters, funcionarios iraníes consideran que las conversaciones permanecen estancadas, mientras la región sigue en alerta. Este miércoles, los precios del petróleo subieron ante el temor a interrupciones del suministro en Oriente Medio y riesgos para el transporte marítimo. El estrecho de Ormuz es una ruta clave para el comercio energético mundial. Por ahora, no hay una solución duradera confirmada. Seguiremos atentos a los anuncios oficiales y a la evolución de las negociaciones. Sigue a Mundo al Día para conocer las últimas noticias internacionales.' }}"
         run: |
           python scripts/create_video_draft.py \
             --title "$STORY_TITLE" \
