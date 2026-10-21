@@ -25,7 +25,7 @@ PHOTO_PATHS = []
 PHOTO_CREDITS = []
 
 
-def download_verified_commons_photo(out_dir, search_query, filename, required_any):
+def download_verified_commons_photo(out_dir, search_query, filename, required_any, forbidden_any=()):
     """Download a real Commons photo only when its file title matches the scene topic and license metadata."""
     api = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode({
         "action": "query", "format": "json", "generator": "search",
@@ -50,8 +50,13 @@ def download_verified_commons_photo(out_dir, search_query, filename, required_an
             continue
         title = page.get("title", "Wikimedia Commons image")
         title_normalized = re.sub(r"[^a-z0-9 ]", " ", title.lower().replace("_", " "))
-        # Reject PDF/document scans and require subject-specific words in the actual file title.
-        if title.lower().endswith(".pdf") or not any(term in title_normalized for term in required_any):
+        # Reject scans, screenshots, portraits, and known off-topic subjects by file title.
+        # The title must contain a scene-specific phrase; vague matches are not accepted.
+        if title.lower().endswith((".pdf", ".djvu", ".svg")):
+            continue
+        if any(term in title_normalized for term in forbidden_any):
+            continue
+        if not any(term in title_normalized for term in required_any):
             continue
         mime = (meta.get("MIMEType", {}).get("value", "") or "").lower()
         if mime and not mime.startswith("image/"):
@@ -236,11 +241,20 @@ def main():
     # Each photo must match the scene subject by its actual Commons file title.
     # If no licensed, relevant image is found, fail the draft rather than use a misleading photo.
     photo_specs = [
-        ("White House exterior building lawn", "foto_casa_blanca.jpg", ["white house exterior", "white house south lawn", "white house north portico exterior"]),
-        ("Iran foreign minister Abbas Araghchi diplomatic meeting", "foto_reunion_diplomatica.jpg", ["araghchi", "iranian diplomatic team", "iran foreign minister"]),
-        ("oil tanker cargo ship Strait of Hormuz shipping", "foto_estrecho_hormuz.jpg", ["oil tanker", "oil tanker ship", "cargo ship strait of hormuz", "tanker strait of hormuz"]),
+        ("White House exterior building lawn", "foto_casa_blanca.jpg",
+         ["white house exterior", "white house south lawn", "white house north portico"],
+         ["barack obama", "malcolm turnbull", "portrait", "inside", "interior", "meeting", "document", "screenshot", "computer"]),
+        ("Iran foreign minister Abbas Araghchi diplomatic meeting", "foto_reunion_diplomatica.jpg",
+         ["abbas araghchi", "araghchi iran", "iran foreign minister", "iranian diplomatic meeting"],
+         ["document", "screenshot", "webpage", "computer screen", "logo", "flag only"]),
+        ("oil tanker cargo ship Strait of Hormuz shipping", "foto_estrecho_hormuz.jpg",
+         ["oil tanker", "oil tanker ship", "cargo ship strait of hormuz", "tanker strait of hormuz"],
+         ["document", "screenshot", "webpage", "computer screen", "diagram", "map", "model ship", "toy ship"]),
     ]
-    PHOTO_CREDITS = [download_verified_commons_photo(OUT, query, filename, required_any) for query, filename, required_any in photo_specs]
+    PHOTO_CREDITS = [
+        download_verified_commons_photo(OUT, query, filename, required_any, forbidden_any)
+        for query, filename, required_any, forbidden_any in photo_specs
+    ]
     PHOTO_PATHS = [item["path"] for item in PHOTO_CREDITS]
     save_photo_credits(OUT, PHOTO_CREDITS)
     voice = os.environ.get("MUNDO_AL_DIA_TTS_VOICE", "es-US-AlonsoNeural")
