@@ -284,12 +284,92 @@ jobs:
                 confirmed.push(story);
               }
             }
-            core.info("Deduplicación: " + confirmedRaw.length + " candidatos confirmados; " + duplicateStories.length + " duplicados excluidos.");
+            // Verificación final automatizada de metadatos: el título del vídeo debe concordar con la noticia
+// y el canal debe corresponder a la fuente editorial. Esto NO concede derechos de reutilización.
+const publisherAliases = {
+  "France 24 Español": ["france 24"],
+  "DW Español": ["dw"],
+  "BBC Mundo": ["bbc"]
+};
+const verifyFinalVideo = async story => {
+  const checks = [];
+  for (const video of story.videos.slice(0, 5)) {
+    try {
+      const u = new URL(video.url);
+      const host = u.hostname.toLowerCase();
+      const isYoutube = host === "youtu.be" || host === "youtube.com" || host.endsWith(".youtube.com");
+      if (isYoutube) {
+        const id = host === "youtu.be"
+          ? u.pathname.split("/").filter(Boolean)[0]
+          : (u.searchParams.get("v") || u.pathname.match(/^\/(?:shorts|embed|live)\/([^/?]+)/i)?.[1]);
+        if (!id) {
+          checks.push({url:video.url,ok:false,reason:"No se pudo identificar un ID concreto de YouTube."});
+          continue;
+        }
+        const oembedUrl = "https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id);
+        const res = await fetch(oembedUrl,{headers,signal:AbortSignal.timeout(6000),redirect:"follow"});
+        if (!res.ok) {
+          checks.push({url:video.url,ok:false,reason:"YouTube no devolvió metadatos accesibles (HTTP " + res.status + ")."});
+          continue;
+        }
+        const meta = await res.json();
+        const titleTokens = new Set(cleanTokens(meta.title || ""));
+        const storyTokens = new Set(cleanTokens(story.title));
+        const overlap = [...storyTokens].filter(w => titleTokens.has(w));
+        const ratio = overlap.length / Math.max(1,Math.min(storyTokens.size,titleTokens.size));
+        const titleOk = overlap.length >= 2 && ratio >= 0.30;
+        const aliases = publisherAliases[story.source] || [];
+        const author = String(meta.author_name || "").toLowerCase();
+        const channelOk = aliases.some(alias => author.includes(alias));
+        const ok = titleOk && channelOk;
+        checks.push({
+          url:video.url,ok,videoTitle:meta.title || "",channel:meta.author_name || "",
+          reason:!titleOk ? "El título de YouTube no coincide suficientemente con la noticia (" + overlap.length + " palabras compartidas)." :
+            !channelOk ? "El canal de YouTube no coincide con la fuente editorial esperada." :
+            "Metadatos de vídeo accesibles; título y canal concuerdan con la noticia y la fuente."
+        });
+      } else {
+        const officialHost =
+          (story.source === "France 24 Español" && (host === "france24.com" || host.endsWith(".france24.com")) ) ||
+          (story.source === "DW Español" && (host === "dw.com" || host.endsWith(".dw.com"))) ||
+          (story.source === "BBC Mundo" && (host === "bbc.com" || host.endsWith(".bbc.com") || host === "bbc.co.uk" || host.endsWith(".bbc.co.uk")));
+        checks.push({
+          url:video.url,ok:false,
+          reason:officialHost
+            ? "Vídeo del medio original: requiere comprobación editorial manual y debe compartirse mediante el reproductor/enlace oficial; no se autoriza descargarlo ni re-subirlo."
+            : "El vídeo no ofrece metadatos de canal/título verificables con este control; requiere revisión manual."
+        });
+      }
+    } catch (e) {
+      checks.push({url:video.url,ok:false,reason:"Falló la consulta de metadatos: " + e.message});
+    }
+  }
+  const passed = checks.some(c => c.ok);
+  return {
+    passed,
+    checks,
+    summary: passed
+      ? "SUPERÓ el control automatizado de metadatos; los derechos de uso siguen sin estar verificados."
+      : "NO SUPERÓ la verificación final automatizada; no debe avanzar a publicación."
+  };
+};
+for (const story of confirmed) {
+  story.finalVerification = await verifyFinalVideo(story);
+  core.info("VERIFICACIÓN FINAL | " + story.title + " | " + story.finalVerification.summary);
+  for (const check of story.finalVerification.checks) {
+    core.info("DETALLE VÍDEO | " + check.url + " | " + (check.ok ? "PASS" : "BLOCK") + " | " + check.reason +
+      (check.videoTitle ? " | título: " + check.videoTitle : "") +
+      (check.channel ? " | canal: " + check.channel : ""));
+  }
+}
+
+core.info("Deduplicación: " + confirmedRaw.length + " candidatos confirmados; " + duplicateStories.length + " duplicados excluidos.");
             for (const d of duplicateStories) core.info("DUPLICADO EXCLUIDO | " + d.title + " | " + d.url + " | duplicado de " + d.duplicateOf);
             // Prioriza los candidatos distintos más recientes; máximo dos por ejecución.
             // Esto solo crea una lista para revisión: no aprueba derechos ni publica contenido.
             confirmed.sort((a, b) => (b.dateMs || 0) - (a.dateMs || 0));
-            const selected = confirmed.slice(0, 2);
+            const selected = confirmed.filter(s => s.finalVerification && s.finalVerification.passed).slice(0, 2);
+const finalBlocked = confirmed.filter(s => !s.finalVerification || !s.finalVerification.passed);
             const review = decision.filter(s => s.status === "NECESITA VERIFICACIÓN");
             const rejected = decision.filter(s => s.status === "RECHAZADO");
             core.summary.addHeading("Mundo al Día — verificación de vídeos (DRY RUN)");
@@ -315,7 +395,17 @@ jobs:
                 ])
               ]);
             };
-            core.summary.addHeading("1. DOS CANDIDATOS PRIORIZADOS — no publicados",2);
+            core.summary.addHeading("1. VERIFICACIÓN FINAL AUTOMATIZADA",2);
+core.summary.addRaw("El filtro comprueba metadatos del vídeo (título y canal) cuando el proveedor los expone. Un PASS NO confirma por sí solo que cada detalle del vídeo sea correcto ni concede derechos de reutilización. Si el control falla, el candidato queda bloqueado. Ningún candidato se publica desde este workflow.\n\n");
+if (confirmed.length) {
+  core.summary.addTable([
+    [{data:"Titular de la noticia",header:true},{data:"Resultado final",header:true},{data:"Evidencia de vídeo",header:true}],
+    ...confirmed.map(s => [s.title, s.finalVerification ? s.finalVerification.summary : "BLOQUEADO: no se pudo verificar", (s.finalVerification?.checks || []).map(c => (c.ok ? "PASS" : "BLOCK") + ": " + c.reason + (c.videoTitle ? " | título: " + c.videoTitle : "") + (c.channel ? " | canal: " + c.channel : "")).join(" ; ")])
+  ]);
+} else {
+  core.summary.addRaw("No hay candidatos confirmados para ejecutar la verificación final.\n\n");
+}
+core.summary.addHeading("2. DOS CANDIDATOS PRIORIZADOS — no publicados",2);
             core.summary.addRaw("Se eligen como máximo dos noticias distintas por ejecución, priorizando las más recientes. Antes de publicar, una persona debe abrir el vídeo, confirmar que corresponde al hecho, revisar contexto y fecha, comprobar licencia/permisos o usar el enlace/embed oficial del medio. Si no hay dos candidatos válidos, el sistema no rellena los espacios con noticias débiles.\n\n");
             if (!selected.length) {
               core.summary.addRaw("No hay candidatos que superen todos los filtros; no se recomienda publicar ningún vídeo.\n\n");
@@ -338,5 +428,5 @@ jobs:
             for (const [i, s] of selected.entries()) {
               core.info("SELECCIÓN PARA REVISIÓN #" + (i+1) + " | " + s.source + " | " + s.published + " | " + s.title + " | ARTÍCULO: " + s.url + " | VÍDEO: " + s.videos.map(v => v.url).join(" ; ") + " | DERECHOS: revisión humana pendiente");
             }
-            core.info("Dry run completado: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas por fuente editorial; " + selected.length + " priorizadas para revisión humana; " + review.length + " necesitan verificación; " + rejected.length + " rechazadas por filtros. No se publicó contenido.");
+            core.info("Dry run completado: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas por fuente editorial; " + selected.length + " superaron metadatos y se priorizan para revisión humana; " + finalBlocked.length + " bloqueadas por la verificación final; " + review.length + " necesitan verificación; " + rejected.length + " rechazadas por filtros. No se publicó contenido.");
             if (sourceResults.every(s => !s.ok)) core.setFailed("Ninguna fuente RSS respondió correctamente.");
