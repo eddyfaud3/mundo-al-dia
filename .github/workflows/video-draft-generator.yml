@@ -55,6 +55,21 @@ jobs:
             --summary "$STORY_SUMMARY" \
             --narration "$STORY_NARRATION"
 
+      - name: Convertir MP4 a formato compatible con iPhone y Safari
+        run: |
+          set -euo pipefail
+          input="video-draft-output/mundo-al-dia-video-original.mp4"
+          output="video-draft-output/mundo-al-dia-video-compatible.mp4"
+          test -s "$input"
+          ffmpeg -y -i "$input" \
+            -c:v libx264 -profile:v baseline -level 4.0 -pix_fmt yuv420p \
+            -r 30 -crf 23 -preset medium \
+            -c:a aac -b:a 128k -ar 44100 -ac 2 \
+            -movflags +faststart "$output"
+          test -s "$output"
+          # Mantener el nombre original como archivo principal del artefacto.
+          mv "$output" "$input"
+
       - name: Verificación final de vídeo y audio
         run: |
           python - <<'PY'
@@ -79,9 +94,15 @@ jobs:
           assert audio_streams, "El MP4 no contiene pista de audio."
           assert video_streams[0].get("width") == 1080, "El vídeo no tiene 1080 píxeles de ancho."
           assert video_streams[0].get("height") == 1920, "El vídeo no tiene 1920 píxeles de alto."
+          assert video_streams[0].get("codec_name") == "h264", "El vídeo no usa H.264."
+          assert video_streams[0].get("profile") == "Constrained Baseline", "El perfil de vídeo no es compatible con el objetivo iPhone."
+          assert video_streams[0].get("pix_fmt") == "yuv420p", "Formato de píxel inesperado."
+          assert audio_streams[0].get("codec_name") == "aac", "El audio no usa AAC."
+          assert audio_streams[0].get("sample_rate") == "44100", "El audio no es de 44,1 kHz."
+          assert int(audio_streams[0].get("channels", 0)) == 2, "El audio no es estéreo."
           duration = float(info["format"].get("duration", 0))
           assert duration >= 5, f"Duración inesperada: {duration:.1f} segundos."
-          print(f"Verificación técnica OK: 1080x1920, audio presente, {duration:.1f} s.")
+          print(f"Verificación técnica OK: H.264 Baseline, yuv420p, AAC estéreo 44,1 kHz, 1080x1920, {duration:.1f} s.")
           print("PUBLICADO=NO — revisión editorial humana obligatoria.")
           PY
 
