@@ -160,6 +160,7 @@ def main():
         "-f", "concat", "-safe", "0", "-i", str(concat),
         "-i", str(audio),
         "-vf", "fps=30,format=yuv420p",
+        "-af", "apad=pad_dur=2",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
         "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart",
         str(video)
