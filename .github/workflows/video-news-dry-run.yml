@@ -5,6 +5,10 @@ on:
     paths:
       - ".github/workflows/video-news-dry-run.yml"
   workflow_dispatch:
+  # Dos comprobaciones diarias en UTC. GitHub solo ejecuta schedule desde la rama predeterminada.
+  # Este flujo sigue siendo DRY RUN y nunca publica contenido.
+  schedule:
+    - cron: "0 12,22 * * *"
 
 permissions:
   contents: read
