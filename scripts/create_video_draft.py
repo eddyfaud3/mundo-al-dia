@@ -25,8 +25,8 @@ PHOTO_PATHS = []
 PHOTO_CREDITS = []
 
 
-def download_verified_commons_photo(out_dir, search_query, filename):
-    """Download a real Commons photo after checking its file-page license metadata."""
+def download_verified_commons_photo(out_dir, search_query, filename, required_any):
+    """Download a real Commons photo only when its file title matches the scene topic and license metadata."""
     api = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode({
         "action": "query", "format": "json", "generator": "search",
         "gsrsearch": "file:" + search_query, "gsrnamespace": 6,
@@ -49,6 +49,9 @@ def download_verified_commons_photo(out_dir, search_query, filename):
         if not image_url:
             continue
         title = page.get("title", "Wikimedia Commons image")
+        title_normalized = re.sub(r"[^a-z0-9 ]", " ", title.lower().replace("_", " "))
+        if not any(term in title_normalized for term in required_any):
+            continue
         artist = meta.get("Artist", {}).get("value", "Author not listed")
         credit = re.sub(r"<[^>]+>", "", artist).strip()
         page_url = "https://commons.wikimedia.org/wiki/" + urllib.parse.quote(title.replace(" ", "_"), safe="/:()")
@@ -166,13 +169,18 @@ def draw_scene(path, title, body, index, total, end_card=False):
     d.rounded_rectangle((66, 72, 440, 145), radius=28, fill=CYAN)
     d.text((92, 84), "MUNDO AL DÍA", font=font(34, True), fill=NAVY)
     d.text((72, 190), "NOTICIAS INTERNACIONALES", font=font(25, True), fill=MUTED)
-    title_lines = wrap_by_pixels(d, title, font(52, True), 920)
-    y = 270
-    for line in title_lines[:5]:
-        d.text((72, y), line, font=font(52, True), fill=WHITE, stroke_width=0)
-        y += 69
-    d.rounded_rectangle((72, y + 12, 220, y + 23), radius=5, fill=CYAN)
-    y += 80
+    if end_card:
+        d.text((72, 230), "GRACIAS POR INFORMARTE", font=font(34, True), fill=MUTED)
+        d.text((72, 300), "MUNDO AL DÍA", font=font(62, True), fill=WHITE)
+        y = 400
+    else:
+        title_lines = wrap_by_pixels(d, title, font(52, True), 920)
+        y = 270
+        for line in title_lines[:4]:
+            d.text((72, y), line, font=font(52, True), fill=WHITE, stroke_width=0)
+            y += 69
+        d.rounded_rectangle((72, y + 12, 220, y + 23), radius=5, fill=CYAN)
+        y += 80
     if not end_card:
         draw_visual(im, d, body, index)
         y = 1110
@@ -221,12 +229,14 @@ def main():
         raise SystemExit("La narración debe tener entre 100 y 2600 caracteres.")
     OUT.mkdir(parents=True, exist_ok=True)
     global PHOTO_PATHS, PHOTO_CREDITS
+    # Each photo must match the scene subject by its actual Commons file title.
+    # If no licensed, relevant image is found, fail the draft rather than use a misleading photo.
     photo_specs = [
-        ("White House exterior North Portico exterior building", "foto_casa_blanca.jpg"),
-        ("Meeting with Foreign Minister of Iran Abbas Araghchi", "foto_reunion_diplomatica.jpg"),
-        ("oil tanker commercial shipping Strait of Hormuz", "foto_estrecho_hormuz.jpg"),
+        ("White House exterior North Portico building", "foto_casa_blanca.jpg", ["white house", "whitehouse", "north portico"]),
+        ("Iran foreign minister Abbas Araghchi diplomatic meeting", "foto_reunion_diplomatica.jpg", ["araghchi", "iran", "foreign minister", "diplomatic meeting"]),
+        ("oil tanker cargo ship Strait of Hormuz shipping", "foto_estrecho_hormuz.jpg", ["tanker", "hormuz", "cargo ship", "oil terminal"]),
     ]
-    PHOTO_CREDITS = [download_verified_commons_photo(OUT, query, filename) for query, filename in photo_specs]
+    PHOTO_CREDITS = [download_verified_commons_photo(OUT, query, filename, required_any) for query, filename, required_any in photo_specs]
     PHOTO_PATHS = [item["path"] for item in PHOTO_CREDITS]
     save_photo_credits(OUT, PHOTO_CREDITS)
     voice = os.environ.get("MUNDO_AL_DIA_TTS_VOICE", "es-US-AlonsoNeural")
