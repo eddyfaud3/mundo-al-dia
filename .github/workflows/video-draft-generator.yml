@@ -169,6 +169,7 @@ jobs:
               "video_url": os.environ["VIDEO_URL"],
               "title": metadata["title"],
               "caption": metadata.get("caption", metadata["title"]),
+              "run_id": os.environ.get("GITHUB_RUN_ID", "manual"),
           }
           request = urllib.request.Request(
               os.environ["SITE_URL"].rstrip("/") + "/api/automation/publish-video",
