@@ -25,6 +25,11 @@ on:
         description: "URL HTTPS del artículo original que contiene las imágenes"
         required: true
         type: string
+      publish_video:
+        description: "Publicar en Facebook e Instagram (déjalo apagado durante las pruebas)"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
