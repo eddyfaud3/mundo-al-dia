@@ -139,7 +139,7 @@ jobs:
             throw new Error("Cloudinary no devolvió una URL HTTPS pública.");
           }
           const fs = await import("node:fs/promises");
-          await fs.writeFile("video-draft-output/public-video-url.txt", uploaded.secure_url + "\\n");
+          await fs.writeFile("video-draft-output/public-video-url.txt", uploaded.secure_url + "\n");
           console.log("MP4 cargado a almacenamiento público HTTPS; todavía no publicado en redes.");
           NODE
 
@@ -154,7 +154,7 @@ jobs:
             echo "::error::Falta MUNDO_AL_DIA_AUTOMATION_SECRET. No se publicará."
             exit 1
           fi
-          VIDEO_URL="$(cat video-draft-output/public-video-url.txt)"
+          export VIDEO_URL="$(cat video-draft-output/public-video-url.txt)"
           python - <<'PY'
           import json, os, urllib.request
           with open("video-draft-output/README.txt", encoding="utf-8") as f:
