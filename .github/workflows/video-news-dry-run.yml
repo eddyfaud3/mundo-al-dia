@@ -5,23 +5,16 @@ on:
     paths:
       - ".github/workflows/video-news-dry-run.yml"
   workflow_dispatch:
-  schedule:
-    # Solo monitoreo en esta rama; este workflow nunca publica en redes.
-    - cron: "30 14,23 * * *"
 
 permissions:
   contents: read
-
-concurrency:
-  group: mundo-al-dia-video-dry-run
-  cancel-in-progress: false
 
 jobs:
   dry-run:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Consultar fuentes y detectar posibles enlaces de vídeo (sin publicar)
+      - name: Consultar fuentes sin publicar
         uses: actions/github-script@v7
         with:
           script: |
@@ -30,106 +23,55 @@ jobs:
               "https://feeds.bbci.co.uk/mundo/rss.xml",
               "https://www.france24.com/es/rss"
             ];
-            const reports = [];
-            const VIDEO_URL_RE = /(?:youtube\\.com\\/(?:watch|shorts|embed)|youtu\\.be\\/|vimeo\\.com\\/|dailymotion\\.com\\/video)/i;
-            const decode = (s) => s
-              .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-              .replace(/&amp;/g, "&").replace(/&quot;/g, '"')
-              .replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<")
-              .replace(/&gt;/g, ">");
-            const tagText = (block, name) => {
-              const m = block.match(new RegExp("<" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)<\\/" + name + ">", "i"));
-              return m ? decode(m[1].replace(/<[^>]+>/g, " ")).trim() : "";
+            const results = [];
+            const clean = (s) => s.replaceAll("<![CDATA[", "").replaceAll("]]>", "").replaceAll("&amp;", "&").replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&gt;", ">");
+            const getTag = (s, tag) => {
+              const start = s.indexOf("<" + tag + ">");
+              if (start < 0) return "";
+              const a = start + tag.length + 2;
+              const end = s.indexOf("</" + tag + ">", a);
+              return end < 0 ? "" : clean(s.slice(a, end).replace(/<[^>]*>/g, " ")).trim();
             };
-            const safeUrl = (value) => {
+            const isVideo = (value) => {
               try {
                 const u = new URL(value);
-                return u.protocol === "https:" ? u.href : null;
-              } catch { return null; }
+                const h = u.hostname.toLowerCase();
+                return h === "youtu.be" || h.endsWith("youtube.com") || h.endsWith("vimeo.com") || h.endsWith("dailymotion.com") || [".mp4", ".m3u8", ".webm"].some(ext => u.pathname.toLowerCase().endsWith(ext));
+              } catch { return false; }
             };
-            for (const url of feeds) {
-              const host = new URL(url).hostname;
+            for (const feed of feeds) {
+              const host = new URL(feed).hostname;
               try {
-                const response = await fetch(url, {
-                  headers: { "User-Agent": "MundoAlDiaVideoDryRun/1.2" },
-                  signal: AbortSignal.timeout(12000)
-                });
+                const response = await fetch(feed, { signal: AbortSignal.timeout(12000) });
                 if (!response.ok) throw new Error("HTTP " + response.status);
                 const xml = await response.text();
-                const items = [...xml.matchAll(/<(?:item|entry)\b[^>]*>([\s\S]*?)<\/(?:item|entry)>/gi)];
-                const mediaCandidates = [];
-                const platformCandidates = [];
-                const likelyVideoStories = [];
-                const articlePages = [];
-                for (const match of items) {
-                  const block = match[1];
-                  const title = tagText(block, "title") || "(sin título)";
-                  const linkTag = block.match(/<(?:link)\\b([^>]*)>([\\s\\S]*?)<\\/link\\s*>/i);
-                  const linkAttrs = block.match(/<(?:link)\\b([^>]*)\\/?\\s*>/i)?.[1] || "";
-                  const articleRaw = (linkTag?.[2] || "").trim() ||
-                    linkAttrs.match(/\\b(?:href|rdf:resource)=["\x27]([^"\x27]+)["\x27]/i)?.[1] ||
-                    block.match(/<link\\b[^>]*>(https?:[^<]+)<\\/link>/i)?.[1] || "";
-                  const articleUrl = safeUrl(decode(articleRaw));
-                  if (articleUrl) articlePages.push({ title, url: articleUrl });
-                  const urlsInItem = [...block.matchAll(/https?:\/\/[^\s"'<>]+/gi)]
-                    .map(m => decode(m[0]).replace(/&amp;/g, "&"))
-                    .map(v => v.replace(/[),.;]+$/, ""));
-                  const mediaTags = [...block.matchAll(/<(?:media:content|media:player|enclosure)\b[^>]*>/gi)].map(m => m[0]);
-                  for (const tag of mediaTags) {
-                    const u = tag.match(/\burl=["']([^"']+)["']/i)?.[1] ||
-                              tag.match(/\bhref=["']([^"']+)["']/i)?.[1];
-                    const type = (tag.match(/\btype=["']([^"']+)["']/i)?.[1] || "").toLowerCase();
-                    const medium = (tag.match(/\bmedium=["']([^"']+)["']/i)?.[1] || "").toLowerCase();
-                    const candidate = u && safeUrl(decode(u));
-                    if (candidate && (type.startsWith("video/") || medium === "video" || /media:player/i.test(tag))) {
-                      mediaCandidates.push({ title, url: candidate });
-                    }
-                  }
-                  for (const raw of urlsInItem) {
-                    const candidate = safeUrl(raw);
-                    if (candidate && /(?:youtube\.com\/(?:watch|shorts|embed)|youtu\.be\/|vimeo\.com\/|dailymotion\.com\/video)/i.test(candidate)) {
-                      platformCandidates.push({ title, url: candidate });
-                    }
-                  }
-                  const description = tagText(block, "description") + " " + tagText(block, "summary") + " " + tagText(block, "content:encoded");
-                  if (/\b(video|vídeo|ver el vídeo|mira el video|en imágenes|reportaje audiovisual)\b/i.test(title + " " + description)) {
-                    likelyVideoStories.push({ title, url: safeUrl(tagText(block, "link")) || safeUrl(urlsInItem[0] || "") });
+                const entries = xml.split("<item>").slice(1).map(s => s.split("</item>")[0]);
+                const candidates = [];
+                for (const entry of entries) {
+                  const title = getTag(entry, "title") || "(sin título)";
+                  const description = getTag(entry, "description") + " " + getTag(entry, "summary");
+                  const urls = entry.split(/\s+/).filter(s => s.startsWith("https://")).map(s => s.replace(/[<>"']+$/g, ""));
+                  for (const url of urls) if (isVideo(url)) candidates.push({ title, url });
+                  if ((title + " " + description).toLowerCase().includes("vídeo") || (title + " " + description).toLowerCase().includes("video")) {
+                    core.info("Posible noticia con vídeo, revisar manualmente: " + title);
                   }
                 }
-                const unique = (arr) => [...new Map(arr.filter(x => x.url).map(x => [x.url, x])).values()];
-                const media = unique(mediaCandidates);
-                const platforms = unique(platformCandidates);
-                const likely = unique(likelyVideoStories);
-                const pageVideoCandidates = [];
-                for (const article of unique(articlePages).slice(0, 5)) {
-                  try {
-                    const pageResponse = await fetch(article.url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; MundoAlDiaVideoDryRun/1.3)" }, signal: AbortSignal.timeout(8000) });
-                    if (!pageResponse.ok) continue;
-                    const html = (await pageResponse.text()).slice(0, 1500000);
-                    const metas = [...html.matchAll(/<meta\\b[^>]*(?:property|name)=["\x27](?:og:video(?::url)?|twitter:player)["\x27][^>]*content=["\x27]([^"\x27]+)["\x27][^>]*>/gi), ...html.matchAll(/<meta\\b[^>]*content=["\x27]([^"\x27]+)["\x27][^>]*(?:property|name)=["\x27](?:og:video(?::url)?|twitter:player)["\x27][^>]*>/gi)];
-                    const embedded = [...html.matchAll(/<(?:iframe|video)\\b[^>]*src=["\x27]([^"\x27]+)["\x27]/gi)].map(m => m[1]);
-                    const found = [...metas.map(m => m[1]), ...embedded].map(v => { try { return new URL(decode(v), article.url).href; } catch { return null; } }).filter(Boolean);
-                    for (const candidate of found) if (VIDEO_URL_RE.test(candidate) || /\\.(?:mp4|m3u8|webm)(?:[?#]|$)/i.test(candidate) || /(?:video|player)/i.test(candidate)) pageVideoCandidates.push({ title: article.title, url: candidate });
-                  } catch (e) { core.info("Article page skipped (no publishing): " + article.url + " — " + e.message); }
-                }
-                const pageVideos = unique(pageVideoCandidates);
-                reports.push({ host, ok: true, itemCount: items.length, mediaCount: media.length, platformCount: platforms.length, pageVideoCount: pageVideos.length, likelyCount: likely.length, examples: [...media, ...platforms, ...pageVideos].slice(0, 3) });
-                core.info("OK " + host + ": " + items.length + " RSS items; " + media.length + " direct/media video candidates; " + platforms.length + " video-platform links; " + pageVideos.length + " video links found on article pages; " + likely.length + " stories with video-related wording.");
-                for (const item of [...media, ...platforms, ...pageVideos].slice(0, 5)) core.info("Video link candidate (not verified or published): " + item.title + " — " + item.url);
-                for (const item of likely.slice(0, 2)) core.info("Possible video story (article page, not a confirmed video URL): " + item.title + " — " + (item.url || "URL not extracted"));
+                const unique = [...new Map(candidates.map(x => [x.url, x])).values()];
+                results.push({ host, ok: true, count: entries.length, videos: unique.length });
+                core.info("OK " + host + ": " + entries.length + " RSS items; " + unique.length + " posibles enlaces de vídeo.");
+                for (const item of unique.slice(0, 5)) core.info("Candidato no verificado: " + item.title + " — " + item.url);
               } catch (e) {
-                reports.push({ host, ok: false, error: e.message });
-                core.warning("Source check failed for " + host + ": " + e.message);
+                results.push({ host, ok: false, count: 0, videos: 0 });
+                core.warning("Falló " + host + ": " + e.message);
               }
             }
-            const healthy = reports.filter(r => r.ok).length;
-            core.summary.addHeading("Mundo al Día — video workflow dry run");
-            core.summary.addRaw("**Modo seguro:** no llama a Railway, Facebook ni Instagram; no crea artículos ni publica contenido. Los enlaces detectados son candidatos y aún requieren verificación editorial y de derechos.\\n\\n");
-            core.summary.addRaw("Fuentes disponibles: **" + healthy + "/" + feeds.length + "**.\\n\\n");
+            const healthy = results.filter(x => x.ok).length;
+            core.summary.addHeading("Mundo al Día — prueba segura de vídeos");
+            core.summary.addRaw("No se publica nada y no se llama a Railway, Facebook ni Instagram. Los candidatos requieren verificación de contenido y derechos.\n\n");
             core.summary.addTable([
-              [{data:"Fuente",header:true},{data:"Estado",header:true},{data:"Elementos RSS",header:true},{data:"Vídeo multimedia",header:true},{data:"Enlaces a plataformas",header:true},{data:"Vídeos en páginas de noticias",header:true},{data:"Noticias con indicios de vídeo",header:true}],
-              ...reports.map(r => [r.host, r.ok ? "OK" : "ERROR", String(r.itemCount ?? 0), String(r.mediaCount ?? 0), String(r.platformCount ?? 0), String(r.pageVideoCount ?? 0), String(r.likelyCount ?? 0)])
+              [{data:"Fuente",header:true},{data:"Estado",header:true},{data:"Elementos RSS",header:true},{data:"Candidatos de vídeo",header:true}],
+              ...results.map(x => [x.host, x.ok ? "OK" : "ERROR", String(x.count), String(x.videos)])
             ]);
             await core.summary.write();
-            if (healthy === 0) core.setFailed("No se pudo consultar ninguna fuente; el modo de prueba no pasa.");
-            else core.info("Dry run terminado. No se publicó ningún contenido.");
+            if (healthy === 0) core.setFailed("Ninguna fuente respondió correctamente.");
+            else core.info("Prueba terminada. No se publicó ningún contenido.");
