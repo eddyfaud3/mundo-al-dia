@@ -1,0 +1,147 @@
+name: Crear vídeo automático de noticias — Mundo al Día
+
+on:
+  schedule:
+    - cron: "35 13 * * *"
+    - cron: "35 22 * * *"
+  workflow_dispatch:
+    inputs:
+      publish_video:
+        description: "Publicar también en Facebook e Instagram (solo después de verificar el borrador)"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mundo-al-dia-auto-video
+  cancel-in-progress: false
+
+jobs:
+  create-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias de vídeo
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade pillow edge-tts CairoSVG
+          python -c "import cairosvg; print('CairoSVG instalado:', cairosvg.__version__)"
+
+      - name: Buscar noticia reciente y crear vídeo automáticamente
+        run: python scripts/create_video_from_latest_news.py
+
+      - name: Convertir MP4 para iPhone y Safari
+        run: |
+          set -euo pipefail
+          input="video-draft-output/mundo-al-dia-video-original.mp4"
+          output="video-draft-output/mundo-al-dia-video-compatible.mp4"
+          test -s "$input"
+          ffmpeg -y -i "$input" \
+            -c:v libx264 -profile:v baseline -level 4.0 -pix_fmt yuv420p \
+            -r 30 -crf 23 -preset medium \
+            -c:a aac -b:a 128k -ar 44100 -ac 2 \
+            -movflags +faststart "$output"
+          test -s "$output"
+          mv "$output" "$input"
+
+      - name: Verificar MP4 y narración
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          video = Path("video-draft-output/mundo-al-dia-video-original.mp4")
+          audio = Path("video-draft-output/narracion_es.mp3")
+          assert video.is_file() and video.stat().st_size > 10000, "Falta el MP4."
+          assert audio.is_file() and audio.stat().st_size > 1000, "Falta la narración."
+          info = json.loads(subprocess.check_output([
+              "ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json", str(video)
+          ], text=True))
+          vs = [s for s in info["streams"] if s.get("codec_type") == "video"]
+          aus = [s for s in info["streams"] if s.get("codec_type") == "audio"]
+          assert vs and aus, "Faltan pistas de vídeo o audio."
+          assert (vs[0].get("width"), vs[0].get("height")) == (1080, 1920), "Resolución incorrecta."
+          assert vs[0].get("codec_name") == "h264" and vs[0].get("pix_fmt") == "yuv420p", "Códec de vídeo incompatible."
+          assert aus[0].get("codec_name") == "aac", "Códec de audio incompatible."
+          print("MP4 verificado:", round(float(info["format"]["duration"]), 1), "segundos.")
+          print("El borrador no se publica en redes salvo que la opción de publicación esté activada.")
+          PY
+
+      - name: Guardar MP4 público en Cloudinary
+        if: ${{ (github.event_name == 'schedule' && vars.VIDEO_AUTO_PUBLISH_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.publish_video == true) }}
+        env:
+          CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDINARY_URL:-}" ]; then
+            echo "::error::Falta el secreto CLOUDINARY_URL; no se publica nada."
+            exit 1
+          fi
+          npm install --no-save cloudinary
+          node --input-type=module <<'NODE'
+          import { v2 as cloudinary } from "cloudinary";
+          import { stat, writeFile } from "node:fs/promises";
+          const file = "video-draft-output/mundo-al-dia-video-original.mp4";
+          const info = await stat(file);
+          if (info.size < 10000) throw new Error("MP4 ausente o demasiado pequeño.");
+          const uploaded = await cloudinary.uploader.upload(file, {
+            resource_type: "video",
+            folder: "mundo-al-dia/videos",
+            public_id: `mundo-al-dia-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`,
+            overwrite: false
+          });
+          if (!uploaded.secure_url?.startsWith("https://")) throw new Error("Cloudinary no devolvió URL HTTPS.");
+          await writeFile("video-draft-output/public-video-url.txt", uploaded.secure_url + "\n");
+          console.log("Vídeo cargado a Cloudinary.");
+          NODE
+
+      - name: Publicar Reel en Facebook e Instagram
+        if: ${{ (github.event_name == 'schedule' && vars.VIDEO_AUTO_PUBLISH_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.publish_video == true) }}
+        env:
+          AUTOMATION_SECRET: ${{ secrets.MUNDO_AL_DIA_AUTOMATION_SECRET }}
+          SITE_URL: https://mundo-al-dia-github-production.up.railway.app
+        run: |
+          set -euo pipefail
+          if [ -z "${AUTOMATION_SECRET:-}" ]; then
+            echo "::error::Falta MUNDO_AL_DIA_AUTOMATION_SECRET; no se publica nada."
+            exit 1
+          fi
+          export VIDEO_URL="$(cat video-draft-output/public-video-url.txt)"
+          python - <<'PY'
+          import json, os, urllib.request
+          with open("video-draft-output/video-metadata.json", encoding="utf-8") as f:
+              metadata = json.load(f)
+          payload = {
+              "video_url": os.environ["VIDEO_URL"],
+              "title": metadata["title"],
+              "caption": metadata.get("caption", metadata["title"]),
+          }
+          request = urllib.request.Request(
+              os.environ["SITE_URL"].rstrip("/") + "/api/automation/publish-video",
+              data=json.dumps(payload).encode(),
+              headers={"Authorization": "Bearer " + os.environ["AUTOMATION_SECRET"],
+                       "Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=120) as response:
+              result = json.loads(response.read().decode())
+          print(json.dumps(result, ensure_ascii=False))
+          if not result.get("facebook", {}).get("published") or not result.get("instagram", {}).get("published"):
+              raise SystemExit("No se confirmó la publicación en ambas redes.")
+          PY
+
+      - name: Guardar vídeo y fuentes como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: mundo-al-dia-video-automatico
+          path: video-draft-output/
+          if-no-files-found: error
+          retention-days: 7
