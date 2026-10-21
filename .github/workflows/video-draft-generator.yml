@@ -1,14 +1,6 @@
 name: Crear borrador de vídeo original — Mundo al Día
 
 on:
-  push:
-    paths:
-      - "scripts/create_video_draft.py"
-      - ".github/workflows/video-draft-generator.yml"
-  pull_request:
-    paths:
-      - "scripts/create_video_draft.py"
-      - ".github/workflows/video-draft-generator.yml"
   workflow_dispatch:
     inputs:
       title:
@@ -21,6 +13,10 @@ on:
         type: string
       narration:
         description: "Narración en español ya revisada (100–2600 caracteres)"
+        required: true
+        type: string
+      source_url:
+        description: "URL HTTPS del artículo original que contiene las imágenes"
         required: true
         type: string
 
@@ -48,12 +44,14 @@ jobs:
         env:
           STORY_TITLE: "${{ inputs.title || 'EE. UU. e Irán siguen sin acuerdo y aumenta la tensión en el estrecho de Ormuz' }}"
           STORY_SUMMARY: "${{ inputs.summary || 'Los contactos entre Estados Unidos e Irán continúan estancados, mientras crece la preocupación por la seguridad marítima en el estrecho de Ormuz. Reuters informó el 21 de octubre de que los precios del petróleo subieron ante el temor a interrupciones del suministro en Oriente Medio. La situación sigue siendo cambiante y no existe un acuerdo definitivo.' }}"
-          STORY_NARRATION: "${{ inputs.narration || 'Las tensiones entre Estados Unidos e Irán continúan y las negociaciones siguen sin alcanzar un acuerdo definitivo. Según Reuters, funcionarios iraníes consideran que las conversaciones permanecen estancadas, mientras la región sigue en alerta. Este miércoles, los precios del petróleo subieron ante el temor a interrupciones del suministro en Oriente Medio y riesgos para el transporte marítimo. El estrecho de Ormuz es una ruta clave para el comercio energético mundial. Por ahora, no hay una solución duradera confirmada. Seguiremos atentos a los anuncios oficiales y a la evolución de las negociaciones. Sigue a Mundo al Día para conocer las últimas noticias internacionales.' }}"
+          STORY_NARRATION: "${{ inputs.narration }}"
+          STORY_SOURCE_URL: "${{ inputs.source_url }}"
         run: |
           python scripts/create_video_draft.py \
             --title "$STORY_TITLE" \
             --summary "$STORY_SUMMARY" \
-            --narration "$STORY_NARRATION"
+            --narration "$STORY_NARRATION" \
+            --source-url "$STORY_SOURCE_URL"
 
       - name: Convertir MP4 a formato compatible con iPhone y Safari
         run: |
