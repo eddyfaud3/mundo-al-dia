@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Leer RSS, inspeccionar artículos y preparar informe seguro
+      - name: Verificar enlaces, páginas, fechas y corroboración independiente (solo informe)
         uses: actions/github-script@v7
         with:
           script: |
@@ -23,136 +23,187 @@ jobs:
               { name: "BBC Mundo", url: "https://feeds.bbci.co.uk/mundo/rss.xml" },
               { name: "France 24 Español", url: "https://www.france24.com/es/rss" }
             ];
-            const headers = { "user-agent": "MundoAlDia-DryRun/1.0 (news verification test)", "accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.9, */*;q=0.8" };
-            const decode = s => s.replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
-            const textOf = s => decode(s.replace(/<script\b[\s\S]*?<\/script>/gi, " ").replace(/<style\b[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
-            const tag = (s, name) => {
-              const safe = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-              const re = new RegExp("<(?:[\\w.-]+:)?" + safe + "\\b[^>]*>([\\s\\S]*?)<\\/(?:[\\w.-]+:)?" + safe + "\\s*>", "i");
-              const m = s.match(re);
-              return m ? textOf(m[1]) : "";
+            const headers = {
+              "user-agent": "MundoAlDia-DryRun/2.0 (editorial verification test)",
+              "accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.9, */*;q=0.8"
             };
+            const decode = s => String(s || "").replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
+            const textOf = s => decode(String(s || "").replace(/<script\b[\s\S]*?<\/script>/gi, " ").replace(/<style\b[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
             const attr = (s, name) => {
-              const safe = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-              const re = new RegExp("\\b" + safe + "\\s*=\\s*(['\"])(.*?)\\1", "i");
-              const m = s.match(re);
+              const re = new RegExp("\\b" + name + "\\s*=\\s*(['\"])(.*?)\\1", "i");
+              const m = String(s || "").match(re);
               return m ? decode(m[2]) : "";
             };
+            const tag = (s, name) => {
+              const re = new RegExp("<(?:[\\w.-]+:)?" + name + "\\b[^>]*>([\\s\\S]*?)<\\/(?:[\\w.-]+:)?" + name + "\\s*>", "i");
+              const m = String(s || "").match(re);
+              return m ? textOf(m[1]) : "";
+            };
             const absolute = (raw, base) => { try { return new URL(raw, base).href; } catch { return ""; } };
-            const videoUrl = raw => {
+            const isVideoUrl = raw => {
               try {
                 const u = new URL(raw);
-                const host = u.hostname.toLowerCase();
-                return host === "youtu.be" || host.endsWith("youtube.com") || host.endsWith("vimeo.com") || host.endsWith("dailymotion.com") || /\.(mp4|m3u8|webm|mov)(?:$)/i.test(u.pathname);
+                const h = u.hostname.toLowerCase();
+                const approvedHost = h === "youtu.be" || h === "youtube.com" || h.endsWith(".youtube.com") || h === "vimeo.com" || h.endsWith(".vimeo.com") || h === "dailymotion.com" || h.endsWith(".dailymotion.com");
+                return approvedHost || /\.(mp4|m3u8|webm|mov)$/i.test(u.pathname);
               } catch { return false; }
             };
-            const cleanTitle = s => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length > 3 && !["para","como","desde","sobre","entre","tras","esta","este","unas","unos","the","with","from","that","this","have","will"].includes(w));
-            const similar = (a,b) => {
-              const aa = new Set(cleanTitle(a)), bb = new Set(cleanTitle(b));
-              if (!aa.size || !bb.size) return false;
-              const common = [...aa].filter(w => bb.has(w)).length;
-              return common >= 3 && common / Math.min(aa.size, bb.size) >= 0.45;
+            const stopWords = new Set(["para","como","desde","sobre","entre","tras","esta","este","estos","estas","unos","unas","donde","cuando","porque","tambien","segun","despues","durante","hasta","contra","ante","their","there","about","after","before","from","with","that","this","have","will","what","were","been","says","said","into","over","more","than","near","world","mundo","ultima","hora","video","vdeo"]);
+            const cleanTokens = s => textOf(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length >= 4 && !stopWords.has(w));
+            const similarity = (a,b) => {
+              const aa = new Set(cleanTokens(a)), bb = new Set(cleanTokens(b));
+              const common = [...aa].filter(w => bb.has(w));
+              const ratio = common.length / Math.max(1, Math.min(aa.size, bb.size));
+              return { common, ratio, match: common.length >= 3 && ratio >= 0.55 };
             };
-            const fetchText = async (url, ms = 9000) => {
+            const fetchText = async (url, ms = 8000) => {
               const res = await fetch(url, { headers, signal: AbortSignal.timeout(ms), redirect: "follow" });
               if (!res.ok) throw new Error("HTTP " + res.status);
               return await res.text();
             };
-            const allStories = [];
+            const getLink = block => {
+              const linkTag = block.match(/<(?:[\w.-]+:)?link\b[^>]*>/i);
+              if (linkTag) {
+                const href = attr(linkTag[0], "href");
+                const rel = attr(linkTag[0], "rel");
+                if (href && (!rel || rel === "alternate")) return href;
+              }
+              return tag(block, "link");
+            };
+            const allIndex = [];
+            const inspectQueue = [];
             const sourceResults = [];
             for (const feed of feeds) {
               try {
                 const xml = await fetchText(feed.url, 12000);
                 const blocks = [...xml.matchAll(/<(?:[\w.-]+:)?(?:item|entry)\b[^>]*>[\s\S]*?<\/(?:[\w.-]+:)?(?:item|entry)\s*>/gi)].map(m => m[0]);
-                const stories = [];
-                for (const block of blocks.slice(0, 18)) {
+                const parsed = blocks.map(block => {
                   const title = tag(block, "title") || "(sin título)";
-                  let link = tag(block, "link");
-                  if (!link) {
-                    const linkTag = block.match(/<(?:[\w.-]+:)?link\b[^>]*>/i);
-                    if (linkTag) link = attr(linkTag[0], "href");
-                  }
-                  link = absolute(link, feed.url);
+                  const link = absolute(getLink(block), feed.url);
                   const published = tag(block, "pubDate") || tag(block, "published") || tag(block, "updated") || tag(block, "date");
                   const dateMs = published ? Date.parse(published) : NaN;
-                  const videoCandidates = [];
+                  const rssVideos = [];
                   for (const m of block.matchAll(/<(?:[\w.-]+:)?(?:content|player|enclosure)\b[^>]*>/gi)) {
                     const el = m[0];
-                    const u = attr(el, "url") || attr(el, "href");
+                    const raw = attr(el, "url") || attr(el, "href");
                     const type = attr(el, "type") + " " + attr(el, "medium");
-                    const abs = absolute(u, feed.url);
-                    if (abs && (videoUrl(abs) || /video/i.test(type))) videoCandidates.push(abs);
+                    const u = absolute(raw, feed.url);
+                    if (u && (isVideoUrl(u) || /video/i.test(type))) rssVideos.push({url:u, evidence:"adjunto multimedia RSS/Atom"});
                   }
-                  for (const m of block.matchAll(/https?:[^\s"'<>]+/gi)) {
-                    const u = absolute(m[0].replace(/&amp;.*$/i, ""), feed.url);
-                    if (u && videoUrl(u)) videoCandidates.push(u);
-                  }
-                  const uniqueVideos = [...new Set(videoCandidates)];
-                  const story = { source: feed.name, title, url: link, published, dateMs, videos: uniqueVideos, articleVideo: false, pageChecked: false, pageStatus: "no revisada" };
-                  if (link && /^https?:/i.test(link) && stories.length < 5) {
-                    try {
-                      const html = await fetchText(link, 7000);
-                      story.pageChecked = true;
-                      story.pageStatus = "página abierta";
-                      const pageUrls = [];
-                      for (const m of html.matchAll(/(?:href|src|content|data-src)\s*=\s*(['"])(.*?)\1/gi)) {
-                        const u = absolute(decode(m[2]), link);
-                        if (u && videoUrl(u)) pageUrls.push(u);
-                      }
-                      for (const m of html.matchAll(/https?:[^\s"'<>\\]+/gi)) {
-                        const u = absolute(m[0].replace(/&amp;/g, "&"), link);
-                        if (u && videoUrl(u)) pageUrls.push(u);
-                      }
-                      story.videos = [...new Set([...story.videos, ...pageUrls])].slice(0, 8);
-                      story.articleVideo = story.videos.length > 0;
-                      if (!story.articleVideo && /\b(video|vídeo|watch|player|youtube|vimeo)\b/i.test(html)) story.pageStatus = "página con señal de vídeo, enlace no confirmado";
-                    } catch (e) {
-                      story.pageStatus = "no se pudo abrir: " + e.message;
-                    }
-                  }
-                  stories.push(story);
-                  allStories.push(story);
-                }
-                sourceResults.push({ name: feed.name, url: feed.url, ok: true, count: blocks.length, inspected: stories.length, videoLinks: stories.filter(s => s.articleVideo).length });
-                core.info("OK " + feed.name + ": " + blocks.length + " entradas RSS/Atom; " + stories.filter(s => s.articleVideo).length + " artículos con posible enlace de vídeo tras inspección.");
+                  return { source:feed.name, feedUrl:feed.url, title, url:link, published, dateMs, rssVideos, pageChecked:false, pageStatus:"sin inspeccionar página", videos:[], pageTitle:"", pageText:"", reason:"" };
+                });
+                allIndex.push(...parsed);
+                inspectQueue.push(...parsed.filter(s => s.url && /^https?:/i.test(s.url)).slice(0, 8));
+                sourceResults.push({ name:feed.name, url:feed.url, ok:true, count:blocks.length, indexed:parsed.length, inspected:0, embeds:0 });
+                core.info("RSS OK " + feed.name + ": " + blocks.length + " entradas; se inspeccionarán hasta 8 páginas.");
               } catch (e) {
-                sourceResults.push({ name: feed.name, url: feed.url, ok: false, count: 0, inspected: 0, videoLinks: 0, error: e.message });
-                core.warning("Falló " + feed.name + ": " + e.message);
+                sourceResults.push({ name:feed.name, url:feed.url, ok:false, count:0, indexed:0, inspected:0, embeds:0, error:e.message });
+                core.warning("Falló la fuente " + feed.name + ": " + e.message);
               }
             }
-            const now = Date.now();
-            const recent = s => Number.isFinite(s.dateMs) && s.dateMs <= now + 6 * 3600000 && s.dateMs >= now - 72 * 3600000;
-            const candidates = [];
-            for (const story of allStories) {
-              if (!story.articleVideo || !story.url || !recent(story)) continue;
-              const corroborating = allStories.filter(other => other.source !== story.source && recent(other) && similar(story.title, other.title));
-              candidates.push({ ...story, corroboratedBy: [...new Set(corroborating.map(s => s.source))] });
+            for (const story of inspectQueue) {
+              try {
+                const html = await fetchText(story.url, 7000);
+                story.pageChecked = true;
+                story.pageStatus = "página abierta";
+                const titleTag = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+                story.pageTitle = titleTag ? textOf(titleTag[1]) : "";
+                const evidence = [];
+                const addVideo = (raw, why) => {
+                  const u = absolute(raw, story.url);
+                  if (u && isVideoUrl(u)) evidence.push({url:u, evidence:why});
+                };
+                for (const m of html.matchAll(/<(iframe|video|source)\b[^>]*>/gi)) {
+                  const el = m[0];
+                  addVideo(attr(el,"src") || attr(el,"data-src"), "<" + m[1].toLowerCase() + "> dentro de la página");
+                }
+                for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
+                  const el = m[0];
+                  const key = (attr(el,"property") + " " + attr(el,"name") + " " + attr(el,"itemprop")).toLowerCase();
+                  if (/video|content_url|embedurl/.test(key)) addVideo(attr(el,"content"), "metadato de vídeo: " + key.trim());
+                }
+                for (const m of html.matchAll(/<script\b[^>]*type\s*=\s*(['"])application\/ld\+json\1[^>]*>([\s\S]*?)<\/script>/gi)) {
+                  const jsonText = decode(m[2]);
+                  if (/VideoObject/i.test(jsonText)) {
+                    const urls = jsonText.match(/https?:\\?\/\\?\/[^"'\\\s]+/g) || [];
+                    for (const raw of urls) addVideo(raw.replace(/\\\//g,"/"), "JSON-LD VideoObject");
+                  }
+                }
+                story.videos = [...new Map(evidence.map(v => [v.url,v])).values()].slice(0,8);
+                story.pageText = textOf(html).slice(0,12000);
+                if (story.videos.length) story.pageStatus = "vídeo detectado en reproductor/metadatos";
+                else if (/\b(video|vídeo|reproductor|player|youtube|vimeo)\b/i.test(html)) story.pageStatus = "señal de vídeo, enlace del reproductor no confirmado";
+                else story.pageStatus = "no se detectó reproductor de vídeo específico";
+              } catch (e) {
+                story.pageStatus = "error al abrir página: " + e.message;
+                story.reason = e.message;
+              }
             }
-            const verified = candidates.filter(s => s.corroboratedBy.length > 0);
-            const needsReview = candidates.filter(s => s.corroboratedBy.length === 0);
-            core.summary.addHeading("Mundo al Día — informe de prueba de vídeos");
-            core.summary.addRaw("MODO SEGURO: este workflow no publica, no llama a Railway, Facebook ni Instagram y no descarga ni reutiliza los vídeos. La presencia de un enlace no confirma por sí sola la veracidad ni concede derechos de reutilización. La corroboración automática por títulos es preliminar y requiere revisión editorial humana.\n\n");
-            core.summary.addHeading("Estado de fuentes", 2);
+            for (const s of sourceResults) {
+              s.inspected = inspectQueue.filter(x => x.source === s.name && x.pageChecked).length;
+              s.embeds = inspectQueue.filter(x => x.source === s.name && x.videos.length > 0).length;
+            }
+            const now = Date.now();
+            const isRecent = s => Number.isFinite(s.dateMs) && s.dateMs <= now + 3*3600000 && s.dateMs >= now - 72*3600000;
+            const decision = [];
+            for (const story of inspectQueue) {
+              const dateOk = isRecent(story);
+              const actualVideo = story.videos.length > 0;
+              const peers = allIndex.filter(other => other.source !== story.source && other.url && isRecent(other) && Number.isFinite(other.dateMs) && Math.abs(other.dateMs-story.dateMs) <= 48*3600000 && similarity(story.title, other.title).match);
+              const peerEvidence = peers.map(p => ({source:p.source,title:p.title,url:p.url,published:p.published}));
+              const eventWords = [...new Set(cleanTokens(story.title))];
+              const pageTitleTokens = new Set(cleanTokens(story.pageTitle));
+              const pageTitleOverlap = eventWords.filter(w => pageTitleTokens.has(w)).length;
+              const pageTitleMatches = pageTitleOverlap >= 2;
+              let status, reason;
+              if (!story.pageChecked) {
+                status = "RECHAZADO";
+                reason = "No se pudo abrir la página del artículo; no se puede verificar el contexto ni el reproductor.";
+              } else if (!dateOk) {
+                status = "RECHAZADO";
+                reason = "Fecha ausente, inválida, demasiado antigua o demasiado futura para esta prueba (ventana: últimas 72 h; tolerancia futura: 3 h).";
+              } else if (!actualVideo) {
+                status = "RECHAZADO";
+                reason = "No se encontró un enlace específico en iframe/video/source o metadatos de vídeo; una palabra o enlace genérico no basta.";
+              } else if (peers.length > 0 && pageTitleMatches) {
+                status = "CONFIRMADO (preliminar)";
+                reason = "Página abierta + reproductor/metadatos de vídeo detectados + título de página coherente + al menos una noticia independiente con palabras clave de evento compartidas y fecha a menos de 48 h. Requiere revisión humana de hechos.";
+              } else {
+                status = "NECESITA VERIFICACIÓN";
+                reason = !pageTitleMatches ? "El título de la página no coincide suficientemente con el titular RSS; revisar redirecciones o página incorrecta." : "Hay un posible vídeo, pero no se encontró una noticia independiente que coincida en evento y fecha dentro del índice RSS consultado.";
+              }
+              decision.push({...story,status,reason,peerEvidence});
+            }
+            const confirmed = decision.filter(s => s.status === "CONFIRMADO (preliminar)");
+            const review = decision.filter(s => s.status === "NECESITA VERIFICACIÓN");
+            const rejected = decision.filter(s => s.status === "RECHAZADO");
+            core.summary.addHeading("Mundo al Día — verificación de vídeos (DRY RUN)");
+            core.summary.addRaw("MODO SOLO PRUEBA: no publica en el sitio, Railway, Facebook ni Instagram; no descarga ni vuelve a subir vídeos. “Confirmado (preliminar)” significa que pasan filtros automáticos de enlace, página, fecha y coincidencia independiente por título/evento; NO equivale a una verificación periodística completa ni confirma derechos de reutilización. Revisión humana obligatoria antes de cualquier uso.\n\n");
+            core.summary.addHeading("Estado de las fuentes",2);
             core.summary.addTable([
-              [{data:"Fuente",header:true},{data:"Estado",header:true},{data:"Entradas RSS/Atom",header:true},{data:"Artículos inspeccionados",header:true},{data:"Con posible vídeo",header:true}],
-              ...sourceResults.map(s => [s.name, s.ok ? "OK" : "ERROR", String(s.count), String(s.inspected), String(s.videoLinks)])
+              [{data:"Fuente",header:true},{data:"Estado",header:true},{data:"Entradas RSS",header:true},{data:"Páginas abiertas",header:true},{data:"Páginas con reproductor/metadatos",header:true}],
+              ...sourceResults.map(s => [s.name,s.ok?"OK":"ERROR",String(s.count),String(s.inspected),String(s.embeds)])
             ]);
-            core.summary.addHeading("Candidatos corroborados preliminarmente (no aprobados para publicar)", 2);
-            if (verified.length) {
+            const renderTable = (items, title) => {
+              core.summary.addHeading(title,2);
+              if (!items.length) { core.summary.addRaw("No hay resultados en esta categoría.\n\n"); return; }
               core.summary.addTable([
-                [{data:"Titular",header:true},{data:"Fuente",header:true},{data:"Otra fuente similar",header:true},{data:"Fecha RSS",header:true},{data:"Página",header:true},{data:"Enlace de vídeo detectado",header:true}],
-                ...verified.slice(0, 15).map(s => [s.title, s.source, s.corroboratedBy.join(", "), s.published || "fecha ausente", s.url, s.videos[0] || "no disponible"])
+                [{data:"Titular RSS",header:true},{data:"Fuente principal",header:true},{data:"Fecha RSS",header:true},{data:"Estado de página/título",header:true},{data:"Enlace del artículo",header:true},{data:"Vídeo y evidencia",header:true},{data:"Fuente independiente / motivo",header:true}],
+                ...items.slice(0,25).map(s => [
+                  s.title,
+                  s.source,
+                  s.published || "fecha ausente",
+                  (s.pageStatus || "") + (s.pageTitle ? " | título página: " + s.pageTitle.slice(0,180) : ""),
+                  s.url || "sin URL",
+                  s.videos.length ? s.videos.map(v => v.url + " (" + v.evidence + ")").join(" ; ") : "ningún enlace específico confirmado",
+                  (s.peerEvidence.length ? s.peerEvidence.map(p => p.source + ": " + p.title + " [" + p.url + "]").join(" ; ") : "") + (s.peerEvidence.length ? " | " : "") + s.reason
+                ])
               ]);
-            } else core.summary.addRaw("No se encontraron candidatos que cumplieran todos los filtros automáticos.\n\n");
-            core.summary.addHeading("Candidatos que necesitan revisión adicional", 2);
-            if (needsReview.length) {
-              core.summary.addTable([
-                [{data:"Titular",header:true},{data:"Fuente",header:true},{data:"Fecha RSS",header:true},{data:"Motivo",header:true},{data:"Artículo",header:true}],
-                ...needsReview.slice(0, 15).map(s => [s.title, s.source, s.published || "fecha ausente", "Enlace detectado, pero sin coincidencia independiente por titular", s.url])
-              ]);
-            } else core.summary.addRaw("Ninguno.\n\n");
-            const pageErrors = allStories.filter(s => s.url && !s.pageChecked).length;
-            core.summary.addRaw("\nLímite de la prueba: se inspeccionan como máximo 5 páginas por fuente. La coincidencia entre titulares no sustituye la verificación de hechos; las fechas ausentes o dudosas se excluyen de los candidatos automáticos. Páginas no abiertas: " + pageErrors + ".\n");
+            };
+            renderTable(confirmed,"1. CONFIRMADOS PRELIMINARMENTE — revisión humana obligatoria");
+            renderTable(review,"2. NECESITAN VERIFICACIÓN");
+            renderTable(rejected,"3. RECHAZADOS POR LOS FILTROS DE ESTA PRUEBA");
+            core.summary.addRaw("\nCobertura: se indexan las entradas RSS devueltas por las fuentes, pero solo se abren como máximo 8 páginas por fuente en este ensayo. La corroboración independiente se busca en los titulares y fechas RSS de las otras fuentes disponibles; la comparación automática puede pasar por alto una noticia redactada de forma diferente o confundir coincidencias. “Rechazado” significa que el candidato no superó los filtros de esta prueba, no que la noticia sea falsa. Ninguna decisión autoriza publicación automática.\n");
             await core.summary.write();
-            core.info("Prueba terminada. " + allStories.length + " entradas analizadas; " + candidates.length + " candidatas con vídeo y fecha reciente; " + verified.length + " con corroboración preliminar. No se publicó ningún contenido.");
-            if (sourceResults.every(s => !s.ok)) core.setFailed("Ninguna fuente respondió correctamente.");
+            core.info("Dry run completado: " + decision.length + " páginas inspeccionadas; " + confirmed.length + " confirmadas preliminarmente; " + review.length + " necesitan verificación; " + rejected.length + " rechazadas por filtros. No se publicó contenido.");
+            if (sourceResults.every(s => !s.ok)) core.setFailed("Ninguna fuente RSS respondió correctamente.");
