@@ -136,10 +136,23 @@ jobs:
                   const u = absolute(raw, story.url);
                   if (u && (isVideoUrl(u) || (allowPublisherPlayer && isFirstPartyPlayerUrl(u)))) evidence.push({url:u, evidence:why});
                 };
-                for (const m of html.matchAll(/<(iframe|video|source)\b[^>]*>/gi)) {
+                for (const m of html.matchAll(/<(iframe|video|source|embed)\b[^>]*>/gi)) {
                   const el = m[0];
-                  const raw = attr(el,"src") || attr(el,"data-src") || attr(el,"data-video-url");
-                  addVideo(raw, "<" + m[1].toLowerCase() + "> dentro de la página", m[1].toLowerCase() === "iframe");
+                  const raw = attr(el,"src") || attr(el,"data-src") || attr(el,"data-video-url") || attr(el,"data-embed-url") || attr(el,"data-player-url");
+                  addVideo(raw, "<" + m[1].toLowerCase() + "> dentro de la página", /iframe|embed/i.test(m[1]));
+                }
+                // Busca URLs de reproductor en atributos de carga diferida y enlaces de la página.
+                for (const m of html.matchAll(/<[a-z][\w:-]*\b[^>]*>/gi)) {
+                  const el = m[0];
+                  for (const key of ["data-src","data-href","data-url","data-video-url","data-embed-url","data-player-url","data-player","data-media-url"]) {
+                    const raw = attr(el,key);
+                    if (raw) addVideo(raw, "atributo " + key, true);
+                  }
+                }
+                for (const m of html.matchAll(/<a\b[^>]*>/gi)) {
+                  const raw = attr(m[0],"href");
+                  const u = absolute(raw, story.url);
+                  if (u && isFirstPartyPlayerUrl(u)) evidence.push({url:u,evidence:"enlace a posible reproductor del mismo medio"});
                 }
                 for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
                   const el = m[0];
