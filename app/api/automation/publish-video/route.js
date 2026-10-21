@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { getPool, initDb } from "../../../../lib/db";
-import { publishArticleToFacebook, publishArticleToInstagram } from "../../../../lib/facebook";
+import { publishVideoToFacebook, publishVideoToInstagram } from "../../../../lib/facebook";
 
 export const runtime = "nodejs";
 
@@ -76,7 +76,7 @@ export async function POST(request) {
 
     let facebook = { published: false, reason: "No se pudo confirmar la publicación en Facebook." };
     try {
-      facebook = await publishArticleToFacebook(article);
+      facebook = await publishVideoToFacebook(article);
       if (facebook.published && facebook.postId) {
         await db.query("UPDATE articles SET facebook_post_id=$1,updated_at=NOW() WHERE id=$2", [facebook.postId, article.id]);
       }
@@ -86,14 +86,16 @@ export async function POST(request) {
 
     let instagram = { published: false, reason: "Instagram no está conectado." };
     try {
-      instagram = await publishArticleToInstagram(article);
+      instagram = await publishVideoToInstagram(article);
     } catch (error) {
       instagram = { published: false, reason: error?.message || "Error de Instagram." };
     }
 
     return NextResponse.json({
       ok: true,
-      published: true,
+      ok: true,
+      site_published: true,
+      social_publication: { facebook: Boolean(facebook.published), instagram: Boolean(instagram.published) },
       id: article.id,
       title: article.title,
       url: `${process.env.NEXT_PUBLIC_SITE_URL || "https://mundo-al-dia-github-production.up.railway.app"}/noticia/${encodeURIComponent(article.slug)}`,
