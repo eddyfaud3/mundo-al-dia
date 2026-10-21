@@ -89,7 +89,21 @@ jobs:
                 for(const m of html.matchAll(/<(?:iframe|video|source|embed)\b[^>]*>/gi)){const el=m[0];const raw=attr(el,"src")||attr(el,"data-src")||attr(el,"data-video-url")||attr(el,"data-embed-url");const u=abs(raw,finalUrl);if(u&&specificVideo(u))videoUrls.push(u)}
                 for(const m of html.matchAll(/<meta\b[^>]*>/gi)){const el=m[0],key=(attr(el,"property")+" "+attr(el,"name")+" "+attr(el,"itemprop")).toLowerCase();if(/video|embedurl|content_url/.test(key)){const u=abs(attr(el,"content"),finalUrl);if(u&&specificVideo(u))videoUrls.push(u)}}
                 for(const m of html.matchAll(/<a\b[^>]*>/gi)){const u=abs(attr(m[0],"href"),finalUrl);if(u&&specificVideo(u))videoUrls.push(u)}
-                const uniqueVideos=[...new Set(videoUrls)].slice(0,5);
+                for(const m of html.matchAll(/<script\\b[^>]*type\\s*=\\s*(['"])application\\/ld\\+json\\1[^>]*>([\\s\\S]*?)<\\/script>/gi)){
+                  try{
+                    const data=JSON.parse(decode(m[2]));
+                    const visit=obj=>{
+                      if(!obj||typeof obj!=="object")return;
+                      const types=Array.isArray(obj["@type"])?obj["@type"]:[obj["@type"]];
+                      if(types.some(t=>String(t||"").toLowerCase()==="videoobject")){
+                        for(const key of ["contentUrl","embedUrl","url"]){const u=abs(obj[key],finalUrl);if(u&&specificVideo(u))videoUrls.push(u)}
+                      }
+                      for(const value of Object.values(obj))if(value&&typeof value==="object")Array.isArray(value)?value.forEach(visit):visit(value);
+                    };
+                    visit(data);
+                  }catch{}
+                }
+                const uniqueVideos=[...new Set(videoUrls)].slice(0,8);
                 if(!uniqueVideos.length)continue;
                 const paragraphs=[...html.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)].map(m=>textOf(m[1])).filter(p=>p.length>=60&&!/(cookies|suscr[ií]bete|aceptar todas|publicidad|síguenos en redes)/i.test(p)).slice(0,10);
                 for(const video of uniqueVideos){
@@ -114,6 +128,8 @@ jobs:
               unique.push(c);
             }
             const selected=unique.slice(0,2);
+            core.info("RESUMEN DE VERIFICACIÓN | páginas RSS recientes: "+stories.length+" | candidatos con metadatos finales válidos: "+candidates.length+" | después de deduplicar: "+unique.length+" | seleccionados para informe: "+selected.length);
+            for(const s of selected)core.info("CANDIDATO VERIFICADO | "+s.source+" | "+s.title+" | video: "+s.videoUrl+" | canal: "+s.channel+" | imagen: "+s.imageUrl);
             core.summary.addHeading("Mundo al Día — verificación final de videos");
             core.summary.addRaw((publishAllowed?"PUBLICACIÓN CONTROLADA: máximo un artículo por ciclo programado. ":"MODO INFORME: esta ejecución no publica. ")+"Se requiere fuente editorial aprobada, fecha de las últimas 72 horas, título coherente, URL de video concreta, metadatos de YouTube cuyo título coincida y canal oficial, e imagen HTTPS del artículo original. Los videos se incrustan mediante el enlace oficial; no se descargan ni se vuelven a subir. Los derechos de las imágenes y la exactitud del hecho no quedan certificados automáticamente.\n\n");
             core.summary.addRaw(sourceStatus.join("\n")+"\n\n");
