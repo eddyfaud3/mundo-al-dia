@@ -1,0 +1,39 @@
+name: Test video publishing API (no publication)
+
+on:
+  push:
+    branches:
+      - test/video-news-workflow
+    paths:
+      - "app/api/automation/publish-video/route.js"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/video-api-route-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/test/video-news-workflow'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout test branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        env:
+          # No publishing credentials are provided in this test.
+          VIDEO_AUTO_PUBLISH_ENABLED: "false"
+        run: npm run build
