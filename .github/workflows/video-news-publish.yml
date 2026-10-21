@@ -8,7 +8,7 @@ on:
   # Dos comprobaciones diarias en UTC. GitHub solo ejecuta schedule desde la rama predeterminada.
   # Este flujo sigue siendo DRY RUN y nunca publica contenido.
   schedule:
-    - cron: "0 12,22 * * *"
+    - cron: "17 0,15 * * *"
 
 permissions:
   contents: read
@@ -225,6 +225,21 @@ jobs:
                   const googleHost = ["google.com","gstatic.com","googleapis.com","googleusercontent.com","ggpht.com","news.google.com"].some(h => imageHost === h || imageHost.endsWith("." + h));
                   story.imageUrl = candidateImage.startsWith("https://") && !googleHost ? candidateImage : "";
                 } catch { story.imageUrl = ""; }
+                const imageAltTag = (html.match(/<meta\\b[^>]*>/gi) || []).find(el => /og:image:alt|twitter:image:alt/i.test(attr(el, "property") + " " + attr(el, "name")));
+                story.imageEvidence = imageAltTag ? attr(imageAltTag, "content") : "";
+                if (!story.imageEvidence && story.imageUrl) {
+                  for (const imgTag of (html.match(/<img\\b[^>]*>/gi) || [])) {
+                    const raw = attr(imgTag, "src") || attr(imgTag, "data-src") || attr(imgTag, "data-lazy-src");
+                    if (raw && absolute(raw, story.finalUrl || story.url) === story.imageUrl && attr(imgTag, "alt")) {
+                      story.imageEvidence = attr(imgTag, "alt");
+                      break;
+                    }
+                  }
+                }
+                if (!story.imageEvidence && story.imageUrl) {
+                  story.imageEvidence = decodeURIComponent(new URL(story.imageUrl).pathname.split("/").pop() || "")
+                    .replace(/\\.[a-z0-9]{2,5}$/i, "").replace(/[-_]/g, " ");
+                }
                 if (story.videos.length) story.pageStatus = "vídeo detectado en reproductor/metadatos";
                 else if (/\b(video|vídeo|reproductor|player|youtube|vimeo)\b/i.test(html)) story.pageStatus = "señal de vídeo, enlace del reproductor no confirmado";
                 else story.pageStatus = "no se detectó reproductor de vídeo específico";
@@ -374,6 +389,17 @@ jobs:
               try { if (story.imageUrl) imageHost = new URL(story.imageUrl).hostname; } catch {}
               core.info("IMAGEN DE FUENTE | " + story.title + " | " + imageHost);
               story.finalVerification = await verifyFinalVideo(story);
+              const titleWords = new Set(cleanTokens(story.title));
+              const imageWords = new Set(cleanTokens(story.imageEvidence || ""));
+              const imageOverlap = [...titleWords].filter(word => imageWords.has(word));
+              story.finalVerification.imagePassed = imageOverlap.length >= 1;
+              story.finalVerification.imageEvidence = story.imageEvidence || "sin alt/caption descriptivo";
+              story.finalVerification.passed = story.finalVerification.passed && story.finalVerification.imagePassed;
+              if (!story.finalVerification.imagePassed) {
+                story.finalVerification.summary = "NO SUPERÓ la verificación final: el alt/caption o nombre de archivo de la imagen no coincide con el titular; no debe publicarse automáticamente.";
+              } else if (story.finalVerification.passed) {
+                story.finalVerification.summary += " La imagen también tiene al menos una palabra relevante del titular en su alt/caption o nombre de archivo.";
+              }
               core.info("VERIFICACIÓN FINAL | " + story.title + " | " + story.finalVerification.summary);
               for (const check of story.finalVerification.checks) {
                 core.info("DETALLE VÍDEO | " + check.url + " | " + (check.ok ? "PASS" : "BLOCK") + " | " + check.reason +
@@ -495,6 +521,7 @@ jobs:
                   else core.warning("Facebook no confirmó: " + (result.facebook?.reason || "sin detalles"));
                   if (result.instagram?.published) core.info("Instagram: publicación confirmada.");
                   else core.warning("Instagram no confirmó: " + (result.instagram?.reason || "sin detalles"));
+                  break; // máximo un artículo nuevo por ciclo: dos ciclos diarios = hasta dos al día
                 } catch (error) { core.warning("Error al publicar " + story.title + ": " + (error?.message || "error desconocido")); }
               }
               core.summary.addRaw("**Publicación automática:** activada. Publicaciones nuevas confirmadas en esta ejecución: " + publishedCount + ". Los vídeos se enlazan desde la fuente original; no se descargan ni se vuelven a subir. La imagen editorial se toma de los metadatos de la página fuente.\n\n");
