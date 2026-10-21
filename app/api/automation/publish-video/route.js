@@ -93,7 +93,6 @@ export async function POST(request) {
 
     return NextResponse.json({
       ok: true,
-      ok: true,
       site_published: true,
       social_publication: { facebook: Boolean(facebook.published), instagram: Boolean(instagram.published) },
       id: article.id,
