@@ -133,8 +133,8 @@ def split_narration(text, parts=3):
 
 
 def draw_visual(im, d, body, index):
-    """Place a real, licensed context photo in a restrained rectangular news frame."""
-    x0, y0, x1, y1 = 545, 695, 1008, 1255
+    """Use a wide, restrained photo frame so the story text has room below."""
+    x0, y0, x1, y1 = 72, 570, 1008, 1040
     if not PHOTO_PATHS:
         raise RuntimeError("No hay fotos con licencia revisable; no se genera un vídeo con imágenes ficticias.")
     photo_path = PHOTO_PATHS[min(max(index - 1, 0), len(PHOTO_PATHS) - 1)]
@@ -148,7 +148,7 @@ def draw_visual(im, d, body, index):
     top = (photo.height - th) // 2
     im.paste(photo.crop((left, top, left + tw, top + th)), (x0, y0))
     d.rectangle((x0, y0, x1, y1), outline=WHITE, width=2)
-    d.text((x0 + 8, y1 + 12), "FOTO DE CONTEXTO · VER FUENTE Y LICENCIA", font=font(17, True), fill=MUTED)
+    d.text((x0 + 8, y1 + 10), "FOTO REAL DE CONTEXTO · VER FUENTE Y LICENCIA", font=font(17, True), fill=MUTED)
 
 
 def draw_scene(path, title, body, index, total, end_card=False):
@@ -175,12 +175,24 @@ def draw_scene(path, title, body, index, total, end_card=False):
     y += 80
     if not end_card:
         draw_visual(im, d, body, index)
-    body_font = font(35 if len(body) < 180 else 31)
-    body_lines = wrap_by_pixels(d, body, body_font, 430)
-    line_h = 47 if body_font.size >= 35 else 42
-    max_lines = max(4, min(14, int((H - y - 360) / line_h)))
-    for line in body_lines[:max_lines]:
-        d.text((76, y), line, font=body_font, fill=WHITE)
+        y = 1110
+        max_width = 920
+        available_height = 570
+    else:
+        y = 430
+        max_width = 920
+        available_height = 760
+    # Reduce font size as needed; never silently cut the end of a sentence.
+    body_font = font(34)
+    body_lines = wrap_by_pixels(d, body, body_font, max_width)
+    while len(body_lines) * 45 > available_height and body_font.size > 24:
+        body_font = font(body_font.size - 2)
+        body_lines = wrap_by_pixels(d, body, body_font, max_width)
+    line_h = body_font.size + 12
+    if len(body_lines) * line_h > available_height:
+        raise RuntimeError(f"El texto de la escena {index} no cabe completo; acorta el texto en lugar de cortarlo.")
+    for line in body_lines:
+        d.text((80, y), line, font=body_font, fill=WHITE)
         y += line_h
     if end_card:
         d.rounded_rectangle((72, 1450, 1008, 1650), radius=30, fill=(5, 17, 37), outline=CYAN, width=3)
@@ -210,9 +222,9 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     global PHOTO_PATHS, PHOTO_CREDITS
     photo_specs = [
-        ("White House exterior official US government", "foto_casa_blanca.jpg"),
+        ("White House exterior North Portico exterior building", "foto_casa_blanca.jpg"),
         ("Meeting with Foreign Minister of Iran Abbas Araghchi", "foto_reunion_diplomatica.jpg"),
-        ("US Navy ships transit Strait of Hormuz", "foto_estrecho_hormuz.jpg"),
+        ("oil tanker commercial shipping Strait of Hormuz", "foto_estrecho_hormuz.jpg"),
     ]
     PHOTO_CREDITS = [download_verified_commons_photo(OUT, query, filename) for query, filename in photo_specs]
     PHOTO_PATHS = [item["path"] for item in PHOTO_CREDITS]
