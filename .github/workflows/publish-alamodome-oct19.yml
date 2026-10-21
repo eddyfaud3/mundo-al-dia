@@ -36,28 +36,28 @@ jobs:
               image_url: "https://d1ldvf68ux039x.cloudfront.net/thumbs/photos/2609/9922252/1000w_q95.jpg",
               video_url: "https://spectee.com/detail/184972",
               content: `SAN ANTONIO, TEXAS — 19 de octubre de 2026.
-
-Un integrante de la Fuerza Aérea de Estados Unidos murió después de caer durante una demostración militar previa a un partido de fútbol americano universitario en el estadio Alamodome, en San Antonio, Texas.
-
-La víctima fue identificada como el sargento técnico Ian Patterson, quien tenía 15 años de servicio militar y estaba asignado al 6.º Escuadrón de Entrenamiento de Combate, Destacamento 2, en la Base Conjunta de San Antonio.
-
-El accidente ocurrió el sábado 17 de octubre durante una ceremonia previa al partido entre la Universidad de Texas en San Antonio (UTSA) y la Academia Naval de Estados Unidos (Navy). Patterson participaba en una demostración de descenso mediante cuerda desde la parte superior del estadio cuando cayó al campo.
-
-Los equipos de emergencia le brindaron asistencia en el lugar y fue trasladado a un hospital, donde falleció a consecuencia de sus heridas.
-
-La Fuerza Aérea confirmó su identidad y expresó sus condolencias a sus familiares, compañeros y amigos. Las autoridades militares investigan las circunstancias del accidente; hasta el momento, no se ha confirmado públicamente una causa definitiva de la caída.
-
-VIDEO: La grabación relacionada con el incidente está disponible a través de Spectee. Pulsa el enlace de video en esta noticia para abrir la fuente original. El acceso y la republicación pueden estar sujetos a licencia.
-
-Nota sobre la fotografía: la imagen que acompaña esta noticia muestra entrenamiento de descenso por cuerda de integrantes de un equipo TACP en Joint Base San Antonio-Camp Bullis; es una imagen de referencia y no muestra el accidente. Foto oficial de la Fuerza Aérea de EE. UU. por Airman 1st Class Amanda Yastrzab, publicada en DVIDS como dominio público.
-
-Fuentes: KSAT 12, Associated Press, U.S. Air Force y DVIDS.
-
-KSAT 12: https://www.ksat.com/news/local/2026/10/19/air-force-identifies-service-member-who-died-after-fall-during-utsa-pregame-ceremony/
-Associated Press: https://apnews.com/article/bb717d8d0e03d9ce11d1da5382c2202e
-Foto oficial de referencia (DVIDS): https://www.dvidshub.net/image/9922252/tacp-students-receive-rappel-training
-
-Mundo al Día — El mundo, al día.`
+            
+            Un integrante de la Fuerza Aérea de Estados Unidos murió después de caer durante una demostración militar previa a un partido de fútbol americano universitario en el estadio Alamodome, en San Antonio, Texas.
+            
+            La víctima fue identificada como el sargento técnico Ian Patterson, quien tenía 15 años de servicio militar y estaba asignado al 6.º Escuadrón de Entrenamiento de Combate, Destacamento 2, en la Base Conjunta de San Antonio.
+            
+            El accidente ocurrió el sábado 17 de octubre durante una ceremonia previa al partido entre la Universidad de Texas en San Antonio (UTSA) y la Academia Naval de Estados Unidos (Navy). Patterson participaba en una demostración de descenso mediante cuerda desde la parte superior del estadio cuando cayó al campo.
+            
+            Los equipos de emergencia le brindaron asistencia en el lugar y fue trasladado a un hospital, donde falleció a consecuencia de sus heridas.
+            
+            La Fuerza Aérea confirmó su identidad y expresó sus condolencias a sus familiares, compañeros y amigos. Las autoridades militares investigan las circunstancias del accidente; hasta el momento, no se ha confirmado públicamente una causa definitiva de la caída.
+            
+            VIDEO: La grabación relacionada con el incidente está disponible a través de Spectee. Pulsa el enlace de video en esta noticia para abrir la fuente original. El acceso y la republicación pueden estar sujetos a licencia.
+            
+            Nota sobre la fotografía: la imagen que acompaña esta noticia muestra entrenamiento de descenso por cuerda de integrantes de un equipo TACP en Joint Base San Antonio-Camp Bullis; es una imagen de referencia y no muestra el accidente. Foto oficial de la Fuerza Aérea de EE. UU. por Airman 1st Class Amanda Yastrzab, publicada en DVIDS como dominio público.
+            
+            Fuentes: KSAT 12, Associated Press, U.S. Air Force y DVIDS.
+            
+            KSAT 12: https://www.ksat.com/news/local/2026/10/19/air-force-identifies-service-member-who-died-after-fall-during-utsa-pregame-ceremony/
+            Associated Press: https://apnews.com/article/bb717d8d0e03d9ce11d1da5382c2202e
+            Foto oficial de referencia (DVIDS): https://www.dvidshub.net/image/9922252/tacp-students-receive-rappel-training
+            
+            Mundo al Día — El mundo, al día.`
             };
 
             const response = await fetch(new URL("/api/automation/publish", process.env.SITE_URL), {
