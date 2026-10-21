@@ -242,9 +242,9 @@ def main():
     concat = OUT / "escenas.txt"
     with concat.open("w", encoding="utf-8") as f:
         for p, dur in zip(scene_paths, durations):
-            f.write(f"file '{p.resolve()}'\\n")
-            f.write(f"duration {dur:.3f}\\n")
-        f.write(f"file '{scene_paths[-1].resolve()}'\\n")
+            f.write(f"file '{p.resolve()}'\n")
+            f.write(f"duration {dur:.3f}\n")
+        f.write(f"file '{scene_paths[-1].resolve()}'\n")
     video = OUT / "mundo-al-dia-video-original.mp4"
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
@@ -254,11 +254,11 @@ def main():
         "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", str(video)
     ])
     (OUT / "README.txt").write_text(
-        "Borrador original de Mundo al Día.\\n"
-        f"Voz neural usada: {voice}; velocidad: {rate}; tono: -2 Hz.\\n"
-        "Revisar FUENTE_Y_LICENCIA_FOTO.txt y confirmar pertinencia antes de publicar.\\n"
-        "Este archivo NO se publicó en el sitio, Facebook ni Instagram.\\n"
-        "Revisión editorial humana requerida antes de cualquier publicación.\\n",
+        "Borrador original de Mundo al Día.\n"
+        f"Voz neural usada: {voice}; velocidad: {rate}; tono: -2 Hz.\n"
+        "Revisar FUENTE_Y_LICENCIA_FOTO.txt y confirmar pertinencia antes de publicar.\n"
+        "Este archivo NO se publicó en el sitio, Facebook ni Instagram.\n"
+        "Revisión editorial humana requerida antes de cualquier publicación.\n",
         encoding="utf-8"
     )
     print(f"VIDEO_GENERADO={video}")
