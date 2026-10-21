@@ -85,6 +85,22 @@ jobs:
                 const description=meta(["og:description","description","twitter:description"])||story.title;
                 const imageUrl=abs(meta(["og:image","og:image:url","twitter:image","twitter:image:src"]),finalUrl);
                 if(!imageUrl||!imageUrl.startsWith("https://")||/google\.com|gstatic\.com|googleusercontent\.com|news\.google\.com/i.test(new URL(imageUrl).hostname))continue;
+                let imageEvidence=meta(["og:image:alt","twitter:image:alt","image:alt"]);
+                if(!imageEvidence){
+                  for(const m of html.matchAll(/<img\b[^>]*>/gi)){
+                    const el=m[0],raw=attr(el,"src")||attr(el,"data-src")||attr(el,"data-lazy-src");
+                    if(raw&&abs(raw,finalUrl)===imageUrl&&attr(el,"alt")){imageEvidence=attr(el,"alt");break}
+                  }
+                }
+                if(!imageEvidence){
+                  const filename=decodeURIComponent(new URL(imageUrl).pathname.split("/").pop()||"").replace(/\.[a-z0-9]{2,5}$/i,"").replace(/[-_]/g," ");
+                  imageEvidence=filename;
+                }
+                const imageMatch=overlap(story.title,imageEvidence);
+                if(imageMatch.n<1){
+                  core.info("IMAGEN BLOQUEADA: no se encontró evidencia textual suficiente de que la foto corresponda al titular | "+story.title+" | alt/archivo: "+imageEvidence);
+                  continue;
+                }
                 const videoUrls=[];
                 for(const m of html.matchAll(/<(?:iframe|video|source|embed)\b[^>]*>/gi)){const el=m[0];const raw=attr(el,"src")||attr(el,"data-src")||attr(el,"data-video-url")||attr(el,"data-embed-url");const u=abs(raw,finalUrl);if(u&&specificVideo(u))videoUrls.push(u)}
                 for(const m of html.matchAll(/<meta\b[^>]*>/gi)){const el=m[0],key=(attr(el,"property")+" "+attr(el,"name")+" "+attr(el,"itemprop")).toLowerCase();if(/video|embedurl|content_url/.test(key)){const u=abs(attr(el,"content"),finalUrl);if(u&&specificVideo(u))videoUrls.push(u)}}
@@ -117,7 +133,7 @@ jobs:
                     const channel=String(metaVideo.author_name||"").toLowerCase();
                     const channelOk=story.aliases.some(a=>channel.includes(a));
                     if(t.n<2||t.ratio<0.30||!channelOk)continue;
-                    candidates.push({...story,pageTitle,description,imageUrl,videoUrl:"https://www.youtube.com/watch?v="+id,videoTitle:metaVideo.title,channel,articleText:paragraphs.join("\n\n").slice(0,7000),verifiedAt:Date.now()});
+                    candidates.push({...story,pageTitle,description,imageUrl,imageEvidence,videoUrl:"https://www.youtube.com/watch?v="+id,videoTitle:metaVideo.title,channel,articleText:paragraphs.join("\n\n").slice(0,7000),verifiedAt:Date.now()});
                   }catch{}
                 }
               }catch(e){core.info("Candidato omitido por error de verificación: "+story.title+" — "+e.message)}
@@ -129,9 +145,9 @@ jobs:
             }
             const selected=unique.slice(0,2);
             core.info("RESUMEN DE VERIFICACIÓN | páginas RSS recientes: "+stories.length+" | candidatos con metadatos finales válidos: "+candidates.length+" | después de deduplicar: "+unique.length+" | seleccionados para informe: "+selected.length);
-            for(const s of selected)core.info("CANDIDATO VERIFICADO | "+s.source+" | "+s.title+" | video: "+s.videoUrl+" | canal: "+s.channel+" | imagen: "+s.imageUrl);
+            for(const s of selected)core.info("CANDIDATO VERIFICADO | "+s.source+" | "+s.title+" | video: "+s.videoUrl+" | canal: "+s.channel+" | imagen: "+s.imageUrl+" | evidencia de imagen: "+s.imageEvidence);
             core.summary.addHeading("Mundo al Día — verificación final de videos");
-            core.summary.addRaw((publishAllowed?"PUBLICACIÓN CONTROLADA: máximo un artículo por ciclo programado. ":"MODO INFORME: esta ejecución no publica. ")+"Se requiere fuente editorial aprobada, fecha de las últimas 72 horas, título coherente, URL de video concreta, metadatos de YouTube cuyo título coincida y canal oficial, e imagen HTTPS del artículo original. Los videos se incrustan mediante el enlace oficial; no se descargan ni se vuelven a subir. Los derechos de las imágenes y la exactitud del hecho no quedan certificados automáticamente.\n\n");
+            core.summary.addRaw((publishAllowed?"PUBLICACIÓN CONTROLADA: máximo un artículo por ciclo programado. ":"MODO INFORME: esta ejecución no publica. ")+"Se requiere fuente editorial aprobada, fecha de las últimas 72 horas, título coherente, URL de video concreta, metadatos de YouTube cuyo título coincida y canal oficial, imagen HTTPS del artículo original y evidencia textual de que la imagen corresponde al titular. Los videos se incrustan mediante el enlace oficial; no se descargan ni se vuelven a subir. Los derechos de las imágenes y la exactitud del hecho no quedan certificados automáticamente.\n\n");
             core.summary.addRaw(sourceStatus.join("\n")+"\n\n");
             if(!selected.length){core.summary.addRaw("No hay candidatos que superen todos los filtros; no se publicará nada.\n");}
             else core.summary.addTable([
