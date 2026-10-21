@@ -525,7 +525,7 @@ jobs:
                 } catch (error) { core.warning("Error al publicar " + story.title + ": " + (error?.message || "error desconocido")); }
               }
               core.summary.addRaw("**Publicación automática:** activada. Publicaciones nuevas confirmadas en esta ejecución: " + publishedCount + ". Los vídeos se enlazan desde la fuente original; no se descargan ni se vuelven a subir. La imagen editorial se toma de los metadatos de la página fuente.\n\n");
-              core.info("PUBLICACIÓN TERMINADA: " + publishedCount + " artículo(s) nuevo(s) publicado(s); máximo dos candidatos por ejecución.");
+              core.info("PUBLICACIÓN TERMINADA: " + publishedCount + " artículo(s) nuevo(s) publicado(s); máximo un artículo nuevo por ciclo.");
             }
             await core.summary.write();
             for (const [i, s] of selected.entries()) {
