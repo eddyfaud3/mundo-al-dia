@@ -68,6 +68,52 @@ def split_narration(text, parts=3):
     return chunks
 
 
+def draw_visual(d, body, index):
+    """Draw a prominent original illustration so each scene has visible imagery."""
+    lower = body.lower()
+    x0, y0, x1, y1 = 545, 625, 1008, 1460
+    d.rounded_rectangle((x0, y0, x1, y1), radius=34, fill=(5, 17, 37), outline=CYAN, width=4)
+    cx, cy = (x0 + x1) // 2, y0 + 255
+    # A large, original editorial illustration, drawn locally (no external media).
+    if any(k in lower for k in ("alamodome", "estadio", "fútbol", "caída", "accidente", "militar")):
+        # Stadium bowl, field, and overhead lights.
+        d.ellipse((x0 + 34, y0 + 105, x1 - 34, y0 + 470), fill=(18, 74, 130), outline=CYAN, width=5)
+        d.ellipse((x0 + 80, y0 + 170, x1 - 80, y0 + 405), fill=(7, 40, 75), outline=WHITE, width=4)
+        d.polygon([(x0 + 90, y0 + 290), (x1 - 90, y0 + 290), (x1 - 125, y0 + 390), (x0 + 125, y0 + 390)], fill=(20, 112, 83))
+        for xx in range(x0 + 120, x1 - 80, 58):
+            d.line((xx, y0 + 315, xx, y0 + 375), fill=(190, 235, 214), width=3)
+        for xx in (x0 + 110, x1 - 110):
+            d.line((xx, y0 + 60, xx - 20, y0 + 120), fill=CYAN, width=7)
+            d.ellipse((xx - 36, y0 + 35, xx + 12, y0 + 78), fill=WHITE)
+        d.text((x0 + 42, y0 + 520), "ESCENA ILUSTRADA", font=font(25, True), fill=CYAN)
+        d.text((x0 + 42, y0 + 570), "Contexto visual", font=font(28, True), fill=WHITE)
+    elif any(k in lower for k in ("protest", "manifest", "marchas", "huelga")):
+        d.rectangle((x0 + 35, y0 + 120, x1 - 35, y0 + 470), fill=(10, 48, 86), outline=CYAN, width=3)
+        for j, xx in enumerate((x0 + 115, x0 + 230, x0 + 345)):
+            d.ellipse((xx - 32, y0 + 205, xx + 32, y0 + 270), fill=(248, 190 - j * 15, 120 + j * 20))
+            d.line((xx, y0 + 270, xx, y0 + 395), fill=WHITE, width=18)
+            d.line((xx, y0 + 310, xx - 38, y0 + 350), fill=WHITE, width=10)
+            d.line((xx, y0 + 310, xx + 38, y0 + 350), fill=WHITE, width=10)
+            d.rectangle((xx - 48, y0 + 110, xx + 48, y0 + 180), fill=CYAN)
+            d.text((xx - 34, y0 + 130), "!", font=font(40, True), fill=NAVY)
+        d.text((x0 + 42, y0 + 520), "SOCIEDAD", font=font(25, True), fill=CYAN)
+        d.text((x0 + 42, y0 + 570), "Personas y actualidad", font=font(26, True), fill=WHITE)
+    else:
+        # Globe, longitude/latitude arcs and simple continent silhouettes.
+        r = 175
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(13, 92, 145), outline=CYAN, width=6)
+        d.ellipse((cx - 95, cy - r, cx + 95, cy + r), outline=(125, 220, 235), width=4)
+        d.ellipse((cx - r, cy - 78, cx + r, cy + 78), outline=(125, 220, 235), width=4)
+        d.arc((cx - r, cy - 125, cx + r, cy + 125), 0, 360, fill=(125, 220, 235), width=3)
+        d.polygon([(cx - 110, cy - 85), (cx - 35, cy - 110), (cx + 5, cy - 50), (cx - 40, cy + 5), (cx - 90, cy - 5)], fill=(86, 196, 142))
+        d.polygon([(cx + 35, cy - 35), (cx + 112, cy - 15), (cx + 95, cy + 60), (cx + 50, cy + 115), (cx + 20, cy + 45)], fill=(86, 196, 142))
+        d.text((x0 + 42, y0 + 520), "MUNDO EN CONTEXTO", font=font(25, True), fill=CYAN)
+        d.text((x0 + 42, y0 + 570), "Información visual", font=font(28, True), fill=WHITE)
+    # Consistent scene marker makes it clear this is an editorial graphic, not documentary footage.
+    d.rounded_rectangle((x0 + 28, y1 - 62, x1 - 28, y1 - 20), radius=14, fill=BLUE)
+    d.text((x0 + 48, y1 - 56), f"GRÁFICO ORIGINAL · {index:02d}", font=font(20, True), fill=WHITE)
+
+
 def draw_scene(path, title, body, index, total, end_card=False):
     im = Image.new("RGB", (W, H))
     px = im.load()
@@ -93,10 +139,12 @@ def draw_scene(path, title, body, index, total, end_card=False):
     d.rounded_rectangle((72, y + 12, 220, y + 23), radius=5, fill=CYAN)
     y += 80
 
-    body_font = font(42 if len(body) < 180 else 36)
-    body_lines = wrap_by_pixels(d, body, body_font, 910)
-    line_h = 58 if body_font.size >= 42 else 50
-    max_lines = max(4, min(11, int((H - y - 300) / line_h)))
+    if not end_card:
+        draw_visual(d, body, index)
+    body_font = font(35 if len(body) < 180 else 31)
+    body_lines = wrap_by_pixels(d, body, body_font, 430)
+    line_h = 47 if body_font.size >= 35 else 42
+    max_lines = max(4, min(14, int((H - y - 360) / line_h)))
     for line in body_lines[:max_lines]:
         d.text((76, y), line, font=body_font, fill=WHITE)
         y += line_h
