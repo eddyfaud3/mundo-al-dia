@@ -1,0 +1,193 @@
+name: Crear borrador de vídeo original — Mundo al Día
+
+on:
+  # Solo se ejecuta manualmente para que el checkbox publish_video no llegue como null
+  # por ejecuciones automáticas de push.
+  workflow_dispatch:
+    inputs:
+      title:
+        description: "Titular revisado por una persona"
+        required: true
+        type: string
+      summary:
+        description: "Resumen verificado (60–1200 caracteres)"
+        required: true
+        type: string
+      narration:
+        description: "Narración en español ya revisada (100–2600 caracteres)"
+        required: true
+        type: string
+      source_url:
+        description: "URL HTTPS del artículo original que contiene las imágenes"
+        required: true
+        type: string
+      publish_video:
+        description: "Publicar en Facebook e Instagram (déjalo apagado durante las pruebas)"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  create-draft:
+    # En ramas de trabajo se crea un borrador de prueba; en main solo se ejecuta manualmente.
+    if: github.event_name == 'workflow_dispatch' || github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar y verificar herramientas locales de creación
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade pillow edge-tts CairoSVG
+          python -c "import cairosvg; print('CairoSVG instalado correctamente:', cairosvg.__version__)"
+
+      - name: Crear vídeo original en español
+        env:
+          STORY_TITLE: "${{ inputs.title || 'Ucrania: la ONU alerta de víctimas civiles y riesgos para la energía antes del invierno' }}"
+          STORY_SUMMARY: "${{ inputs.summary || 'La ONU advirtió el 16 de octubre de 2026 que los ataques rusos en Ucrania siguen causando numerosas víctimas civiles y amenazan las infraestructuras energéticas antes del invierno. La misión de derechos humanos de Naciones Unidas verificó al menos 328 civiles muertos y 2.105 heridos en septiembre. La situación continúa siendo grave para la población.' }}"
+          STORY_NARRATION: "${{ inputs.narration || 'Última hora. Naciones Unidas alerta de que los ataques en Ucrania siguen aumentando el sufrimiento de la población civil. Según la misión de derechos humanos de la ONU, en septiembre se verificaron al menos 328 civiles muertos y 2.105 heridos. Los ataques contra infraestructuras energéticas también amenazan el acceso a la electricidad y la calefacción cuando se acerca el invierno. La organización pide proteger a la población civil y advierte que la situación humanitaria continúa siendo grave. Mundo al Día. El mundo, al día.' }}"
+          STORY_SOURCE_URL: "${{ inputs.source_url || 'https://ukraine.un.org/en/324562-civilian-casualties-remain-record-levels-amid-intensifying-attacks-energy-winter-approaches' }}"
+        run: |
+          python scripts/create_video_draft.py \
+            --title "$STORY_TITLE" \
+            --summary "$STORY_SUMMARY" \
+            --narration "$STORY_NARRATION" \
+            --source-url "$STORY_SOURCE_URL"
+
+      - name: Convertir MP4 a formato compatible con iPhone y Safari
+        run: |
+          set -euo pipefail
+          input="video-draft-output/mundo-al-dia-video-original.mp4"
+          output="video-draft-output/mundo-al-dia-video-compatible.mp4"
+          test -s "$input"
+          ffmpeg -y -i "$input" \
+            -c:v libx264 -profile:v baseline -level 4.0 -pix_fmt yuv420p \
+            -r 30 -crf 23 -preset medium \
+            -c:a aac -b:a 128k -ar 44100 -ac 2 \
+            -movflags +faststart "$output"
+          test -s "$output"
+          # Mantener el nombre original como archivo principal del artefacto.
+          mv "$output" "$input"
+
+      - name: Verificación final de vídeo y audio
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          video = Path("video-draft-output/mundo-al-dia-video-original.mp4")
+          audio = Path("video-draft-output/narracion_es.mp3")
+          assert video.is_file() and video.stat().st_size > 10000, "Falta el MP4 o es demasiado pequeño."
+          assert audio.is_file() and audio.stat().st_size > 1000, "Falta el audio de narración."
+
+          raw = subprocess.check_output([
+              "ffprobe", "-v", "error", "-show_streams", "-show_format",
+              "-of", "json", str(video)
+          ], text=True)
+          info = json.loads(raw)
+          streams = info.get("streams", [])
+          video_streams = [s for s in streams if s.get("codec_type") == "video"]
+          audio_streams = [s for s in streams if s.get("codec_type") == "audio"]
+          assert video_streams, "El MP4 no contiene pista de vídeo."
+          assert audio_streams, "El MP4 no contiene pista de audio."
+          assert video_streams[0].get("width") == 1080, "El vídeo no tiene 1080 píxeles de ancho."
+          assert video_streams[0].get("height") == 1920, "El vídeo no tiene 1920 píxeles de alto."
+          assert video_streams[0].get("codec_name") == "h264", "El vídeo no usa H.264."
+          assert video_streams[0].get("profile") == "Constrained Baseline", "El perfil de vídeo no es compatible con el objetivo iPhone."
+          assert video_streams[0].get("pix_fmt") == "yuv420p", "Formato de píxel inesperado."
+          assert audio_streams[0].get("codec_name") == "aac", "El audio no usa AAC."
+          assert audio_streams[0].get("sample_rate") == "44100", "El audio no es de 44,1 kHz."
+          assert int(audio_streams[0].get("channels", 0)) == 2, "El audio no es estéreo."
+          duration = float(info["format"].get("duration", 0))
+          assert duration >= 5, f"Duración inesperada: {duration:.1f} segundos."
+          print(f"Verificación técnica OK: H.264 Baseline, yuv420p, AAC estéreo 44,1 kHz, 1080x1920, {duration:.1f} s.")
+          print("PUBLICADO=NO — revisión editorial humana obligatoria.")
+          PY
+
+
+      - name: Guardar MP4 en Cloudinary como URL pública HTTPS
+        if: ${{ inputs.publish_video == true }}
+        env:
+          CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDINARY_URL:-}" ]; then
+            echo "::error::Falta configurar el secreto CLOUDINARY_URL en GitHub. No se publicó nada."
+            exit 1
+          fi
+          npm install --no-save cloudinary
+          node --input-type=module <<'NODE'
+          import { v2 as cloudinary } from "cloudinary";
+          import { stat } from "node:fs/promises";
+          const file = "video-draft-output/mundo-al-dia-video-original.mp4";
+          const info = await stat(file);
+          if (info.size < 10000) throw new Error("MP4 ausente o demasiado pequeño.");
+          const uploaded = await cloudinary.uploader.upload(file, {
+            resource_type: "video",
+            folder: "mundo-al-dia/videos",
+            public_id: `mundo-al-dia-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`,
+            overwrite: false,
+            invalidate: false,
+          });
+          if (!uploaded.secure_url || !uploaded.secure_url.startsWith("https://")) {
+            throw new Error("Cloudinary no devolvió una URL HTTPS pública.");
+          }
+          const fs = await import("node:fs/promises");
+          await fs.writeFile("video-draft-output/public-video-url.txt", uploaded.secure_url + "\n");
+          console.log("MP4 cargado a almacenamiento público HTTPS; todavía no publicado en redes.");
+          NODE
+
+      - name: Publicar Reel en Facebook e Instagram
+        if: ${{ inputs.publish_video == true }}
+        env:
+          AUTOMATION_SECRET: ${{ secrets.MUNDO_AL_DIA_AUTOMATION_SECRET }}
+          SITE_URL: https://mundo-al-dia-github-production.up.railway.app
+        run: |
+          set -euo pipefail
+          if [ -z "${AUTOMATION_SECRET:-}" ]; then
+            echo "::error::Falta MUNDO_AL_DIA_AUTOMATION_SECRET. No se publicará."
+            exit 1
+          fi
+          export VIDEO_URL="$(cat video-draft-output/public-video-url.txt)"
+          python - <<'PY'
+          import json, os, urllib.request
+          with open("video-draft-output/README.txt", encoding="utf-8") as f:
+              readme = f.read()
+          # The reviewed title is written to the manifest by the generator.
+          with open("video-draft-output/video-metadata.json", encoding="utf-8") as f:
+              metadata = json.load(f)
+          payload = {
+              "video_url": os.environ["VIDEO_URL"],
+              "title": metadata["title"],
+              "caption": metadata.get("caption", metadata["title"]),
+          }
+          request = urllib.request.Request(
+              os.environ["SITE_URL"].rstrip("/") + "/api/automation/publish-video",
+              data=json.dumps(payload).encode(),
+              headers={"Authorization": "Bearer " + os.environ["AUTOMATION_SECRET"],
+                       "Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=120) as response:
+              result = json.loads(response.read().decode())
+          print(json.dumps(result, ensure_ascii=False))
+          if not result.get("facebook", {}).get("published") or not result.get("instagram", {}).get("published"):
+              raise SystemExit("La publicación en ambas redes no quedó confirmada.")
+          PY
+
+      - name: Guardar borrador como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: mundo-al-dia-video-original-draft
+          path: video-draft-output/
+          if-no-files-found: error
+          retention-days: 7
