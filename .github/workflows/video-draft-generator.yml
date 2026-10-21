@@ -48,10 +48,10 @@ jobs:
 
       - name: Crear vídeo original en español
         env:
-          STORY_TITLE: "${{ inputs.title || 'EE. UU. e Irán siguen sin acuerdo y aumenta la tensión en el estrecho de Ormuz' }}"
-          STORY_SUMMARY: "${{ inputs.summary || 'Los contactos entre Estados Unidos e Irán continúan estancados, mientras crece la preocupación por la seguridad marítima en el estrecho de Ormuz. Reuters informó el 21 de octubre de que los precios del petróleo subieron ante el temor a interrupciones del suministro en Oriente Medio. La situación sigue siendo cambiante y no existe un acuerdo definitivo.' }}"
-          STORY_NARRATION: "${{ inputs.narration || 'Última hora. Cuatro personas murieron tras una nueva serie de ataques rusos contra Ucrania. Entre las víctimas hay dos adultos mayores de más de 80 años. En Kyiv, un dron impactó un edificio de apartamentos, mientras que cerca de Járkiv murió una pareja de ancianos. Los ataques también afectaron instalaciones energéticas en varias regiones. Las autoridades informaron de daños en edificios residenciales y otras infraestructuras civiles. La situación sigue siendo tensa mientras continúan los esfuerzos diplomáticos para poner fin a la guerra. Mundo al Día. El mundo, al día.' }}"
-          STORY_SOURCE_URL: "${{ inputs.source_url || 'https://www.reuters.com/world/europe/four-killed-russian-strikes-ukraine-prime-minister-says-2026-10-21/' }}"
+          STORY_TITLE: "${{ inputs.title || 'La ONU alerta del aumento de víctimas civiles en Ucrania y los ataques contra la energía' }}"
+          STORY_SUMMARY: "${{ inputs.summary || 'La ONU advirtió el 16 de octubre de 2026 que los ataques rusos en Ucrania siguen causando numerosas víctimas civiles y amenazan las infraestructuras energéticas antes del invierno. La misión de derechos humanos de Naciones Unidas verificó al menos 328 civiles muertos y 2.105 heridos en septiembre. La situación continúa siendo grave para la población.' }}"
+          STORY_NARRATION: "${{ inputs.narration || 'Última hora. Naciones Unidas alerta de que los ataques en Ucrania siguen aumentando el sufrimiento de la población civil. Según la misión de derechos humanos de la ONU, en septiembre se verificaron al menos 328 civiles muertos y 2.105 heridos. Los ataques contra infraestructuras energéticas también amenazan el acceso a la electricidad y la calefacción cuando se acerca el invierno. La organización pide proteger a la población civil y advierte que la situación humanitaria continúa siendo grave. Mundo al Día. El mundo, al día.' }}"
+          STORY_SOURCE_URL: "${{ inputs.source_url || 'https://ukraine.un.org/en/324562-civilian-casualties-remain-record-levels-amid-intensifying-attacks-energy-winter-approaches' }}"
         run: |
           python scripts/create_video_draft.py \
             --title "$STORY_TITLE" \
