@@ -84,6 +84,8 @@ jobs:
                 if (isVideoUrl(raw)) return true;
                 if (!isFirstPartyPlayerUrl(raw)) return false;
                 const article = new URL(story.url);
+                // La propia página del artículo no cuenta como enlace de vídeo; debe ser un player/embed o vídeo real.
+                if (u.hostname === article.hostname && u.pathname === article.pathname) return false;
                 const p = decodeURIComponent(u.pathname).toLowerCase();
                 const a = decodeURIComponent(article.pathname).toLowerCase();
                 // First-party player must be the story itself or have a strong title overlap.
