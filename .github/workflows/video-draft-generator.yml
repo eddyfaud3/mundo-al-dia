@@ -1,6 +1,10 @@
 name: Crear borrador de vídeo original — Mundo al Día
 
 on:
+  push:
+    paths:
+      - "scripts/create_video_draft.py"
+      - ".github/workflows/video-draft-generator.yml"
   workflow_dispatch:
     inputs:
       title:
@@ -21,6 +25,8 @@ permissions:
 
 jobs:
   create-draft:
+    # En ramas de trabajo se crea un borrador de prueba; en main solo se ejecuta manualmente.
+    if: github.event_name == 'workflow_dispatch' || github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -36,9 +42,9 @@ jobs:
 
       - name: Crear vídeo original en español
         env:
-          STORY_TITLE: ${{ inputs.title }}
-          STORY_SUMMARY: ${{ inputs.summary }}
-          STORY_NARRATION: ${{ inputs.narration }}
+          STORY_TITLE: ${{ inputs.title || 'Prueba técnica: cómo verificar una noticia' }}
+          STORY_SUMMARY: ${{ inputs.summary || 'Esta es una prueba técnica del generador de vídeo. No representa una noticia real ni contiene afirmaciones de actualidad. Sirve únicamente para comprobar que el sistema produce gráficos originales y una narración en español.' }}
+          STORY_NARRATION: ${{ inputs.narration || 'Esta es una prueba técnica de Mundo al Día. El sistema crea gráficos originales y una voz sintética en español a partir de un texto de ejemplo. Este contenido no es una noticia real y no debe publicarse como información de actualidad. La publicación automática permanece desactivada.' }}
         run: |
           python scripts/create_video_draft.py \
             --title "$STORY_TITLE" \
