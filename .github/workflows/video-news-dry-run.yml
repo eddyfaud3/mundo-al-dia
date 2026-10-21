@@ -248,7 +248,40 @@ jobs:
               }
               decision.push({...story,status,reason,peerEvidence});
             }
-            const confirmed = decision.filter(s => s.status === "CONFIRMADO (fuente editorial fiable)");
+            // Deduplicación editorial: una misma noticia/vídeo no debe ocupar dos plazas.
+            // Canonicaliza los IDs de YouTube y compara también los titulares.
+            const videoKey = raw => {
+              try {
+                const u = new URL(raw);
+                const h = u.hostname.toLowerCase();
+                if (h === "youtu.be") return "youtube:" + u.pathname.split("/").filter(Boolean)[0];
+                if (h === "youtube.com" || h.endsWith(".youtube.com")) {
+                  const id = u.searchParams.get("v") || u.pathname.match(/^\/(?:shorts|embed|live)\/([^/?]+)/i)?.[1];
+                  if (id) return "youtube:" + id;
+                }
+                if ((h === "vimeo.com" || h.endsWith(".vimeo.com")) && /\/(?:video\/)?\d+/.test(u.pathname)) return "vimeo:" + u.pathname.match(/\d+/)?.[0];
+                return u.href.replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase();
+              } catch { return String(raw || "").trim().toLowerCase(); }
+            };
+            const confirmedRaw = decision.filter(s => s.status === "CONFIRMADO (fuente editorial fiable)");
+            const confirmed = [];
+            const duplicateStories = [];
+            for (const story of confirmedRaw) {
+              const keys = new Set(story.videos.map(v => videoKey(v.url)));
+              const duplicate = confirmed.find(prior => {
+                const priorKeys = new Set(prior.videos.map(v => videoKey(v.url)));
+                const sameVideo = [...keys].some(k => k && priorKeys.has(k));
+                const sameStory = similarity(story.title, prior.title).match;
+                return sameVideo || sameStory;
+              });
+              if (duplicate) {
+                duplicateStories.push({ title: story.title, url: story.url, duplicateOf: duplicate.url });
+              } else {
+                confirmed.push(story);
+              }
+            }
+            core.info("Deduplicación: " + confirmedRaw.length + " candidatos confirmados; " + duplicateStories.length + " duplicados excluidos.");
+            for (const d of duplicateStories) core.info("DUPLICADO EXCLUIDO | " + d.title + " | " + d.url + " | duplicado de " + d.duplicateOf);
             const review = decision.filter(s => s.status === "NECESITA VERIFICACIÓN");
             const rejected = decision.filter(s => s.status === "RECHAZADO");
             core.summary.addHeading("Mundo al Día — verificación de vídeos (DRY RUN)");
