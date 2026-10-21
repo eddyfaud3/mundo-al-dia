@@ -241,9 +241,9 @@ def main():
     # Each photo must match the scene subject by its actual Commons file title.
     # If no licensed, relevant image is found, fail the draft rather than use a misleading photo.
     photo_specs = [
-        ("White House exterior building lawn", "foto_casa_blanca.jpg",
-         ["white house exterior", "white house south lawn", "white house north portico"],
-         ["barack obama", "malcolm turnbull", "portrait", "inside", "interior", "meeting", "document", "screenshot", "computer"]),
+        ("White House", "foto_casa_blanca.jpg",
+         ["white house"],
+         ["barack obama", "malcolm turnbull", "portrait", "inside", "interior", "meeting", "document", "screenshot", "computer", "logo", "seal", "flag", "model"]),
         ("Iran foreign minister Abbas Araghchi diplomatic meeting", "foto_reunion_diplomatica.jpg",
          ["abbas araghchi", "araghchi iran", "iran foreign minister", "iranian diplomatic meeting"],
          ["document", "screenshot", "webpage", "computer screen", "logo", "flag only"]),
