@@ -388,7 +388,7 @@ def main():
         run([
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-loop", "1", "-i", str(p),
-            "-vf", "zoompan=z='min(1.0+0.0011*on,1.08)':x='iw/2-(iw/zoom/2)+12*sin(on/35)':y='ih/2-(ih/zoom/2)+10*cos(on/42)':d=1:s=1080x1920:fps=30,format=yuv420p",
+            "-vf", "zoompan=z='min(1.0+0.00028*on,1.12)':x='max(0,min(iw-iw/zoom,(iw-iw/zoom)/2+24*sin(on/55)))':y='max(0,min(ih-ih/zoom,(ih-ih/zoom)/2+18*cos(on/67)))':d=1:s=1080x1920:fps=30,format=yuv420p",
             "-frames:v", str(frames), "-an",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
             "-pix_fmt", "yuv420p", str(clip)
