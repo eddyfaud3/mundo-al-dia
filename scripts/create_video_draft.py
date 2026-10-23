@@ -308,7 +308,7 @@ def draw_scene(path, title, body, index, total, end_card=False):
 
 def caption_phrases(text, max_chars=38):
     """Split narration into short, readable caption cards (max two short lines)."""
-    words = re.sub(r"\\s+", " ", text.strip()).split()
+    words = re.sub(r"\s+", " ", text.strip()).split()
     phrases, current = [], []
     for word in words:
         candidate = " ".join(current + [word])
@@ -349,7 +349,7 @@ def write_timed_subtitles(chunks, durations, output_path):
         offset += duration
     with output_path.open("w", encoding="utf-8") as f:
         for index, (start, end, phrase) in enumerate(entries, 1):
-            f.write(f"{index}\\n{srt_timestamp(start)} --> {srt_timestamp(end)}\\n{phrase}\\n\\n")
+            f.write(f"{index}\n{srt_timestamp(start)} --> {srt_timestamp(end)}\n{phrase}\n\n")
 
 
 def main():
