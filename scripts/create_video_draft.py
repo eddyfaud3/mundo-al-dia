@@ -306,7 +306,7 @@ def draw_scene(path, title, body, index, total, end_card=False):
     im.save(path, quality=95)
 
 
-def caption_phrases(text, max_chars=38):
+def caption_phrases(text, max_chars=30):
     """Split narration into short, readable caption cards (max two short lines)."""
     words = re.sub(r"\s+", " ", text.strip()).split()
     phrases, current = [], []
@@ -441,7 +441,7 @@ def main():
         run([
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-loop", "1", "-i", str(p),
-            "-vf", "zoompan=z='min(1.0+0.00028*on,1.12)':x='max(0,min(iw-iw/zoom,(iw-iw/zoom)/2+24*sin(on/55)))':y='max(0,min(ih-ih/zoom,(ih-ih/zoom)/2+18*cos(on/67)))':d=1:s=1080x1920:fps=30,format=yuv420p",
+            "-vf", "zoompan=z='min(1.0+0.00008*on,1.035)':x='max(0,min(iw-iw/zoom,(iw-iw/zoom)/2+5*sin(on/55)))':y='max(0,min(ih-ih/zoom,(ih-ih/zoom)/2+5*cos(on/67)))':d=1:s=1080x1920:fps=30,format=yuv420p",
             "-frames:v", str(frames), "-an",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
             "-pix_fmt", "yuv420p", str(clip)
@@ -453,9 +453,9 @@ def main():
     video = OUT / "mundo-al-dia-video-original.mp4"
     subtitle_filter = (
         f"subtitles=filename='{subtitles.as_posix()}':"
-        "force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,"
+        "force_style='FontName=DejaVu Sans,FontSize=13,PrimaryColour=&H00FFFFFF,"
         "OutlineColour=&H00101828,BorderStyle=3,BackColour=&H99081830,"
-        "Outline=1,Shadow=0,Alignment=2,MarginV=280'"
+        "Outline=1,Shadow=0,Alignment=2,MarginV=220'"
     )
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
