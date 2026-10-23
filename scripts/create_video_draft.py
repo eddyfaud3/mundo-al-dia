@@ -403,7 +403,7 @@ def main():
     if not subtitles.is_file() or subtitles.stat().st_size < 20:
         raise RuntimeError("No se generó un archivo SRT de subtítulos válido; se detiene el borrador.")
     srt_text = subtitles.read_text(encoding="utf-8-sig")
-    if "-->" not in srt_text or not re.search(r"\\d{2}:\\d{2}:\\d{2},\\d{3}", srt_text):
+    if "-->" not in srt_text or not re.search(r"\d{2}:\d{2}:\d{2},\d{3}", srt_text):
         raise RuntimeError("El archivo de subtítulos no tiene formato SRT válido; se detiene el borrador.")
     silent_video = OUT / "video-sin-audio.mp4"
     frames = 30 * 30
@@ -441,7 +441,7 @@ def main():
     print(f"VIDEO_GENERADO={video}")
     print("DURACION_OBJETIVO_SEGUNDOS=30")
     print("VOZ=es-MX-JorgeNeural")
-    print("SUBTITULOS=NO")
+    print("SUBTITULOS=SRT_GENERADO")
     print("PUBLICADO=NO")
 
 
