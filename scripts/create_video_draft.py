@@ -413,6 +413,7 @@ def main():
     video = OUT / "mundo-al-dia-video-original.mp4"
     narration_audio = OUT / "narracion-es-MX-JorgeNeural.mp3"
     narration = re.sub(r"\s+", " ", (args.narration or args.summary or title).strip())
+    narration = fit_narration_to_30_seconds(narration, max_words=32)
     if not narration:
         raise RuntimeError("No hay narración en español; no se generará un vídeo silencioso.")
     # Keep the approved Spanish neural voice and ask edge-tts for timed SRT captions.
