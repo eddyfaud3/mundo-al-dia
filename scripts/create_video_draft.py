@@ -367,7 +367,7 @@ PlayResY: 1920
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,DejaVu Sans,40,&H00FFFFFF,&H0000FFFF,&H00101828,&HCC081830,-1,0,3,2,0,2,90,90,340,1
+Style: Caption,DejaVu Sans,40,&H00FFFFFF,&H0000FFFF,&H00101828,&HCC081830,-1,0,3,2,0,2,90,90,650,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
