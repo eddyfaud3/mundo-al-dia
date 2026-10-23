@@ -83,8 +83,39 @@ jobs:
           candidates.sort(key=lambda x: x["published"], reverse=True)
           if not candidates:
               raise SystemExit("No se encontró una noticia con resumen suficiente y fecha verificable de las últimas 72 horas. No se generó vídeo. " + "; ".join(errors))
+          # Conservative cross-source corroboration: require a separate publisher with
+          # at least 3 meaningful title terms in common and >=40% overlap of the
+          # smaller title-token set, published within 36 hours. This is a gate,
+          # not proof that every fact is true; drafts still cannot auto-publish.
+          def title_tokens(value):
+              return {w for w in re.findall(r"[a-záéíóúñü]{4,}", value.lower())
+                      if w not in {"para", "desde", "hasta", "sobre", "entre", "tras", "según", "ante", "como", "esta", "este", "estos", "estas", "porque", "donde", "cuando", "también"}}
+          corroborated = {}
+          for story in candidates:
+              tokens = title_tokens(story["title"])
+              matches = []
+              for other in candidates:
+                  if other["source"] == story["source"]:
+                      continue
+                  other_tokens = title_tokens(other["title"])
+                  common = tokens & other_tokens
+                  smaller = min(len(tokens), len(other_tokens))
+                  if len(common) >= 3 and smaller and len(common) / smaller >= 0.40:
+                      try:
+                          t1 = datetime.fromisoformat(story["published"])
+                          t2 = datetime.fromisoformat(other["published"])
+                          if abs((t1 - t2).total_seconds()) <= 36 * 3600:
+                              matches.append({"source": other["source"], "title": other["title"], "url": other["url"], "common_terms": sorted(common)})
+                      except Exception:
+                          pass
+              if matches:
+                  corroborated[story["url"]] = matches
+          print("Noticias RSS recientes:", len(candidates))
+          print("Noticias con coincidencia preliminar entre fuentes:", len(corroborated))
           chosen = None
           for story in candidates[:12]:
+              if story["url"] not in corroborated:
+                  continue
               try:
                   req = urllib.request.Request(story["url"], headers={"User-Agent": "Mozilla/5.0 (compatible; MundoAlDiaDraftTest/1.0)", "Accept": "text/html"})
                   with urllib.request.urlopen(req, timeout=15) as response:
@@ -110,7 +141,7 @@ jobs:
               except Exception:
                   continue
           if not chosen:
-              raise SystemExit("Los artículos recientes no superaron las comprobaciones básicas de página y título. No se generó vídeo.")
+              raise SystemExit("Ninguna noticia superó la corroboración preliminar en una segunda fuente independiente y las comprobaciones de página/título. No se generó vídeo.")
           # Narration is a cautious, source-attributed draft based ONLY on the RSS summary.
           # It is not independent fact-checking and must not be auto-published.
           summary = chosen["summary"]
@@ -127,7 +158,8 @@ jobs:
               "narration": narration,
               "source_url": chosen["final_url"],
               "published": chosen["published"],
-              "warning": "Borrador automático: corroboración independiente y derechos de imágenes NO verificados."
+              "preliminary_corroboration": corroborated.get(chosen["url"], []),
+              "warning": "La coincidencia de titulares entre fuentes es solo preliminar; no verifica cada hecho. Derechos de imágenes NO verificados. Borrador no publicable automáticamente."
           }
           Path("story.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
           print("Noticia elegida:", chosen["title"])
