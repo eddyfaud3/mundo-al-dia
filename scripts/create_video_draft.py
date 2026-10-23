@@ -293,7 +293,7 @@ def draw_scene(path, title, body="", index=1, total=1, end_card=False):
     d.rectangle((x0, y0, x1, y1), outline=WHITE, width=2)
     im.save(path, quality=95)
 
-def fit_narration_to_30_seconds(text, max_words=40):
+def fit_narration_to_30_seconds(text, max_words=32):
     """Keep a short Spanish narration with room for a 30-second video."""
     cleaned = re.sub(r"\s+", " ", text.strip())
     sentences = re.split(r"(?<=[.!?])\s+", cleaned)
@@ -459,7 +459,7 @@ def main():
 
     (OUT / "video-metadata.json").write_text(
         json.dumps({"title": title, "source_url": args.source_url,
-                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 62, "overlay_text": "title_only",
+                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 32, "overlay_text": "title_only",
                     "voice": "es-MX-JorgeNeural", "audio": "Spanish narration",
                     "captions": "Spanish SRT burned into video for Facebook and Instagram; compact lower-screen styling"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
     )
