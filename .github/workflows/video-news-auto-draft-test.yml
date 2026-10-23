@@ -23,10 +23,9 @@ jobs:
       - name: Instalar dependencias de vídeo
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          python -m pip install --upgrade pip
-          python -m pip install pillow edge-tts CairoSVG
+          # GitHub's Ubuntu runner normally includes FFmpeg; avoid slow apt downloads.
+          ffmpeg -version
+          python -m pip install --disable-pip-version-check --retries 2 --timeout 20 pillow edge-tts CairoSVG
           python -c "import cairosvg; print('CairoSVG OK:', cairosvg.__version__)"
 
       - name: Seleccionar automáticamente una noticia reciente de una fuente reconocida
