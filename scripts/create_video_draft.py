@@ -396,9 +396,15 @@ def main():
     narration = re.sub(r"\s+", " ", (args.narration or args.summary or title).strip())
     if not narration:
         raise RuntimeError("No hay narración en español; no se generará un vídeo silencioso.")
-    # Keep the previously approved Spanish neural voice; no subtitles are generated.
+    # Keep the approved Spanish neural voice and ask edge-tts for timed SRT captions.
+    subtitles = OUT / "subtitulos-es.srt"
     run(["edge-tts", "--voice", "es-MX-JorgeNeural", "--rate=+12%", "--text", narration,
-         "--write-media", str(narration_audio)])
+         "--write-media", str(narration_audio), "--write-subtitles", str(subtitles)])
+    if not subtitles.is_file() or subtitles.stat().st_size < 20:
+        raise RuntimeError("No se generó un archivo SRT de subtítulos válido; se detiene el borrador.")
+    srt_text = subtitles.read_text(encoding="utf-8-sig")
+    if "-->" not in srt_text or not re.search(r"\\d{2}:\\d{2}:\\d{2},\\d{3}", srt_text):
+        raise RuntimeError("El archivo de subtítulos no tiene formato SRT válido; se detiene el borrador.")
     silent_video = OUT / "video-sin-audio.mp4"
     frames = 30 * 30
     run([
@@ -422,10 +428,10 @@ def main():
         json.dumps({"title": title, "source_url": args.source_url,
                     "duration_seconds": 30, "overlay_text": "title_only",
                     "voice": "es-MX-JorgeNeural", "audio": "Spanish narration",
-                    "captions": "none"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
+                    "captions": "subtitulos-es.srt (SRT con tiempos generados por edge-tts)"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
     )
     (OUT / "README.txt").write_text(
-        "Borrador de vídeo Mundo al Día: 30 segundos con narración en español (voz es-MX-JorgeNeural), sin subtítulos.\\n"
+        "Borrador de vídeo Mundo al Día: 30 segundos con narración en español (voz es-MX-JorgeNeural) y archivo SRT separado.\\n"
         "En pantalla solo aparecen el logotipo y el titular; no se añaden otros textos.\\n"
         f"Artículo original: {args.source_url}\\n"
         "La licencia de la imagen no se verifica automáticamente. Confirmar permisos antes de publicar.\\n"
