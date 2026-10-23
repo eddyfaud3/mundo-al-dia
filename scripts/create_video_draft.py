@@ -266,14 +266,20 @@ def draw_scene(path, title, body="", index=1, total=1, end_card=False):
         im.paste(plate, (54, 42), plate)
         d = ImageDraw.Draw(im)
 
-    title_font = font(52, True)
+    title_font = font(42, True)
     title_lines = wrap_by_pixels(d, title, title_font, 920)
-    while len(title_lines) > 4 and title_font.size > 36:
+    while len(title_lines) > 3 and title_font.size > 30:
         title_font = font(title_font.size - 2, True)
         title_lines = wrap_by_pixels(d, title, title_font, 920)
+    if len(title_lines) > 3:
+        title_lines = title_lines[:3]
+        last = title_lines[-1]
+        while last and d.textbbox((0, 0), last + "…", font=title_font)[2] > 920:
+            last = last.rsplit(" ", 1)[0] if " " in last else last[:-1]
+        title_lines[-1] = last.rstrip(" ,;:") + "…"
     y = 245
     line_height = title_font.size + 18
-    for line in title_lines[:4]:
+    for line in title_lines:
         d.text((72, y), line, font=title_font, fill=WHITE)
         y += line_height
     d.rounded_rectangle((72, y + 8, 220, y + 19), radius=5, fill=CYAN)
@@ -413,7 +419,7 @@ def main():
     video = OUT / "mundo-al-dia-video-original.mp4"
     narration_audio = OUT / "narracion-es-MX-JorgeNeural.mp3"
     narration = re.sub(r"\s+", " ", (args.narration or args.summary or title).strip())
-    narration = fit_narration_to_30_seconds(narration, max_words=32)
+    narration = fit_narration_to_30_seconds(narration, max_words=78)
     if not narration:
         raise RuntimeError("No hay narración en español; no se generará un vídeo silencioso.")
     # Keep the approved Spanish neural voice and ask edge-tts for timed SRT captions.
@@ -460,7 +466,7 @@ def main():
 
     (OUT / "video-metadata.json").write_text(
         json.dumps({"title": title, "source_url": args.source_url,
-                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 32, "overlay_text": "title_only",
+                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 78, "overlay_text": "title_only",
                     "voice": "es-MX-JorgeNeural", "audio": "Spanish narration",
                     "captions": "Spanish SRT burned into video for Facebook and Instagram; compact lower-screen styling"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
     )
