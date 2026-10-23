@@ -113,9 +113,10 @@ jobs:
           print("Noticias RSS recientes:", len(candidates))
           print("Noticias con coincidencia preliminar entre fuentes:", len(corroborated))
           chosen = None
+          # Select a recent story whose own article page is reachable and matches its RSS title.
+          # Independent cross-source matches are recorded when available, but absence of a
+          # title match sends the draft to human review; it does not label the story false.
           for story in candidates[:12]:
-              if story["url"] not in corroborated:
-                  continue
               try:
                   req = urllib.request.Request(story["url"], headers={"User-Agent": "Mozilla/5.0 (compatible; MundoAlDiaDraftTest/1.0)", "Accept": "text/html"})
                   with urllib.request.urlopen(req, timeout=15) as response:
@@ -159,7 +160,8 @@ jobs:
               "source_url": chosen["final_url"],
               "published": chosen["published"],
               "preliminary_corroboration": corroborated.get(chosen["url"], []),
-              "warning": "La coincidencia de titulares entre fuentes es solo preliminar; no verifica cada hecho. Derechos de imágenes NO verificados. Borrador no publicable automáticamente."
+              "verification_status": "PENDIENTE_DE_VERIFICACION_HUMANA",
+              "warning": "La selección comprueba fuente RSS, fecha y página original. La coincidencia entre titulares es preliminar; no verifica cada hecho. Revisar cifras, nombres, contexto y segunda fuente fiable antes de publicar. Borrador no publicable automáticamente."
           }
           Path("story.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
           print("Noticia elegida:", chosen["title"])
@@ -207,11 +209,12 @@ jobs:
           cat > video-draft-output/REVISION_ANTES_DE_PUBLICAR.txt <<'EOF'
           BORRADOR AUTOMÁTICO — NO PUBLICADO.
           Este flujo no llama a Railway, Facebook ni Instagram.
-          La selección automática solo comprueba RSS reciente, página HTTP/HTML y coincidencia básica del título.
-          No es una verificación independiente de los hechos.
-          Comprobar cifras, nombres, fecha, contexto y corroboración en una segunda fuente fiable.
-          Las imágenes se extraen de la página original, pero sus derechos/licencia no se verifican automáticamente.
-          No publicar hasta que una persona confirme los hechos y los permisos de las imágenes.
+          La selección automática comprueba RSS reciente, fecha y página HTTP/HTML de la fuente.
+          La coincidencia entre titulares de distintas fuentes es preliminar y puede no existir.
+          Estado editorial: PENDIENTE DE VERIFICACIÓN HUMANA.
+          Comprobar cifras, nombres, fecha, contexto y una segunda fuente fiable antes de publicar.
+          El vídeo de prueba se genera sin fotos ni imágenes de terceros.
+          Este flujo no publica ni llama a Railway, Facebook o Instagram.
           EOF
 
       - name: Guardar borrador y fuentes como artefacto
