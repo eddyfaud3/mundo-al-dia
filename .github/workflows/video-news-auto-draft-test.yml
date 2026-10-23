@@ -8,6 +8,9 @@ on:
       - ".github/workflows/video-news-auto-draft-test.yml"
       - "scripts/create_video_draft.py"
   workflow_dispatch:
+  # Solo crea borradores; no publica ni llama a Railway/Meta.
+  schedule:
+    - cron: "17 13,22 * * *"
 
 permissions:
   contents: read
