@@ -415,12 +415,15 @@ def main():
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
         "-pix_fmt", "yuv420p", "-t", "30", "-movflags", "+faststart", str(silent_video)
     ])
-    # Preserve exactly 30 seconds and the approved narration voice; never burn captions into the image.
+    # Burn the timed Spanish SRT captions into the picture so they remain visible
+    # on both Facebook and Instagram, independent of each platform's caption settings.
+    # Keep the narration audio and exact 30-second vertical video.
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
         "-i", str(silent_video), "-i", str(narration_audio),
-        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
-        "-af", "apad", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
+        "-vf", f"subtitles={subtitles.as_posix()}:force_style='FontName=DejaVu Sans,FontSize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00101828,BorderStyle=3,Outline=2,Shadow=0,Alignment=2,MarginV=150'",
+        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        "-pix_fmt", "yuv420p", "-af", "apad", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
         "-t", "30", "-movflags", "+faststart", str(video)
     ])
 
@@ -428,10 +431,10 @@ def main():
         json.dumps({"title": title, "source_url": args.source_url,
                     "duration_seconds": 30, "overlay_text": "title_only",
                     "voice": "es-MX-JorgeNeural", "audio": "Spanish narration",
-                    "captions": "subtitulos-es.srt (SRT con tiempos generados por edge-tts)"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
+                    "captions": "Spanish SRT burned into video for Facebook and Instagram"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
     )
     (OUT / "README.txt").write_text(
-        "Borrador de vídeo Mundo al Día: 30 segundos con narración en español (voz es-MX-JorgeNeural) y archivo SRT separado.\\n"
+        "Borrador de vídeo Mundo al Día: 30 segundos con narración en español (voz es-MX-JorgeNeural) y subtítulos españoles visibles integrados en el vídeo.\\n"
         "En pantalla solo aparecen el logotipo y el titular; no se añaden otros textos.\\n"
         f"Artículo original: {args.source_url}\\n"
         "La licencia de la imagen no se verifica automáticamente. Confirmar permisos antes de publicar.\\n"
