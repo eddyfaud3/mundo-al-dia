@@ -293,10 +293,10 @@ def draw_scene(path, title, body="", index=1, total=1, end_card=False):
     d.rectangle((x0, y0, x1, y1), outline=WHITE, width=2)
     im.save(path, quality=95)
 
-def fit_narration_to_30_seconds(text, max_words=62):
-    """Keep a concise, complete Spanish narration that fits the 30-second format."""
-    cleaned = re.sub(r"\\s+", " ", text.strip())
-    sentences = re.split(r"(?<=[.!?])\\s+", cleaned)
+def fit_narration_to_30_seconds(text, max_words=40):
+    """Keep a short Spanish narration with room for a 30-second video."""
+    cleaned = re.sub(r"\s+", " ", text.strip())
+    sentences = re.split(r"(?<=[.!?])\s+", cleaned)
     chosen = []
     for sentence in sentences:
         candidate = " ".join(chosen + [sentence]).strip()
