@@ -97,11 +97,16 @@ def download_article_images(out_dir, article_url, max_images=6):
             continue
         seen.add(url)
         candidates.append((url, preferred))
-    candidates.sort(key=lambda item: not item[1])
+    # Safer image policy: prefer ONLY the article's social preview (og:image).
+    # If there is no social preview, use ONLY the first image found inside an article element.
+    # Never fill the video with every image found across the page, as those may be related-story thumbnails.
+    preferred = [item for item in candidates if item[1]]
+    in_article = [item for item in candidates if item[1] is False]
+    candidates = preferred[:1] if preferred else in_article[:1]
 
     credits = []
     for url, _preferred in candidates:
-        if len(credits) >= max_images:
+        if len(credits) >= 1:
             break
         try:
             req = urllib.request.Request(url, headers={
@@ -274,13 +279,15 @@ def draw_scene(path, title, body, index, total, end_card=False):
         y += 80
     if not end_card:
         draw_visual(im, d, body, index)
-        y = 1110
-        max_width = 920
-        available_height = 570
-    else:
-        y = 430
-        max_width = 920
-        available_height = 760
+        # The spoken narration will appear as timed subtitles; avoid duplicating a full paragraph.
+        # Keep the lower caption area clear and the brand footer below it.
+        d.text((72, 1760), "INFORMACIÓN EN ESPAÑOL · MUNDO AL DÍA", font=font(24, True), fill=MUTED)
+        d.text((930, 1815), f"{index:02d}/{total:02d}", font=font(25, True), fill=CYAN)
+        im.save(path, quality=95)
+        return
+    y = 430
+    max_width = 920
+    available_height = 760
     # Reduce font size as needed; never silently cut the end of a sentence.
     body_font = font(34)
     body_lines = wrap_by_pixels(d, body, body_font, max_width)
@@ -293,14 +300,56 @@ def draw_scene(path, title, body, index, total, end_card=False):
     for line in body_lines:
         d.text((80, y), line, font=body_font, fill=WHITE)
         y += line_h
-    if end_card:
-        d.rounded_rectangle((72, 1450, 1008, 1650), radius=30, fill=(5, 17, 37), outline=CYAN, width=3)
-        d.text((110, 1492), "EL MUNDO, AL DÍA.", font=font(48, True), fill=WHITE)
-        d.text((110, 1570), "Sigue la página para más información", font=font(27), fill=MUTED)
-    else:
-        d.text((72, 1740), "INFORMACIÓN EN ESPAÑOL · MUNDO AL DÍA", font=font(24, True), fill=MUTED)
-        d.text((930, 1815), f"{index:02d}/{total:02d}", font=font(25, True), fill=CYAN)
+    d.rounded_rectangle((72, 1450, 1008, 1650), radius=30, fill=(5, 17, 37), outline=CYAN, width=3)
+    d.text((110, 1492), "EL MUNDO, AL DÍA.", font=font(48, True), fill=WHITE)
+    d.text((110, 1570), "Sigue la página para más información", font=font(27), fill=MUTED)
     im.save(path, quality=95)
+
+
+def caption_phrases(text, max_chars=38):
+    """Split narration into short, readable caption cards (max two short lines)."""
+    words = re.sub(r"\\s+", " ", text.strip()).split()
+    phrases, current = [], []
+    for word in words:
+        candidate = " ".join(current + [word])
+        if current and len(candidate) > max_chars:
+            phrases.append(" ".join(current))
+            current = [word]
+        else:
+            current.append(word)
+    if current:
+        phrases.append(" ".join(current))
+    return phrases
+
+
+def srt_timestamp(seconds):
+    ms = max(0, int(round(seconds * 1000)))
+    hours, ms = divmod(ms, 3_600_000)
+    minutes, ms = divmod(ms, 60_000)
+    secs, ms = divmod(ms, 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
+
+
+def write_timed_subtitles(chunks, durations, output_path):
+    """Estimate per-phrase timings from each TTS segment duration and word count."""
+    entries = []
+    offset = 0.0
+    for chunk, duration in zip(chunks, durations):
+        phrases = caption_phrases(chunk)
+        weights = [max(1, len(p.split())) for p in phrases]
+        total_weight = sum(weights) or 1
+        cursor = offset
+        for phrase, weight in zip(phrases, weights):
+            segment = duration * weight / total_weight
+            start = cursor
+            end = cursor + segment
+            # A tiny gap helps distinguish consecutive captions without losing spoken content.
+            entries.append((start, end, phrase))
+            cursor = end
+        offset += duration
+    with output_path.open("w", encoding="utf-8") as f:
+        for index, (start, end, phrase) in enumerate(entries, 1):
+            f.write(f"{index}\\n{srt_timestamp(start)} --> {srt_timestamp(end)}\\n{phrase}\\n\\n")
 
 
 def main():
@@ -369,6 +418,10 @@ def main():
             f.write(f"file '{part.resolve()}'\n")
     run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat",
          "-safe", "0", "-i", str(audio_list), "-c", "copy", str(audio)])
+    # Burn readable Spanish subtitles into the video, timed to the narration.
+    subtitles = OUT / "subtitulos_es.srt"
+    write_timed_subtitles(narration_chunks, durations, subtitles)
+
     scene_paths = []
     for i, chunk in enumerate(narration_chunks, 1):
         p = OUT / f"escena_{i:02d}.png"
@@ -398,9 +451,16 @@ def main():
         for clip in animated_clips:
             f.write(f"file '{clip.resolve()}'\n")
     video = OUT / "mundo-al-dia-video-original.mp4"
+    subtitle_filter = (
+        f"subtitles=filename='{subtitles.as_posix()}':"
+        "force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,"
+        "OutlineColour=&H00101828,BorderStyle=3,BackColour=&H99081830,"
+        "Outline=1,Shadow=0,Alignment=2,MarginV=280'"
+    )
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
         "-f", "concat", "-safe", "0", "-i", str(concat), "-i", str(audio),
+        "-vf", subtitle_filter,
         "-af", "apad=pad_dur=2",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
         "-c:a", "aac", "-b:a", "128k", "-t", f"{sum(durations)+2:.3f}",
