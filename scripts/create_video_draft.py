@@ -469,7 +469,8 @@ def main():
 
     (OUT / "video-metadata.json").write_text(
         json.dumps({"title": title, "source_url": args.source_url,
-                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 78, "overlay_text": "title_only",\n                    "photo": "none", "visual": "neutral branded graphic; no external photo",
+                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 78, "overlay_text": "title_only",
+                    "photo": "none", "visual": "neutral branded graphic; no external photo",
                     "voice": "es-MX-JorgeNeural", "audio": "Spanish narration",
                     "captions": "Spanish SRT burned into video for Facebook and Instagram; compact lower-screen styling"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
     )
