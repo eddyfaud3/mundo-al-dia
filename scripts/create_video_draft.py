@@ -330,26 +330,52 @@ def srt_timestamp(seconds):
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
 
 
+def ass_time(seconds):
+    centiseconds = max(0, int(round(seconds * 100)))
+    hours, centiseconds = divmod(centiseconds, 360000)
+    minutes, centiseconds = divmod(centiseconds, 6000)
+    secs, centiseconds = divmod(centiseconds, 100)
+    return f"{hours}:{minutes:02d}:{secs:02d}.{centiseconds:02d}"
+
+
 def write_timed_subtitles(chunks, durations, output_path):
-    """Estimate per-phrase timings from each TTS segment duration and word count."""
+    """Write explicit ASS styling so captions stay readable below the photo."""
     entries = []
     offset = 0.0
     for chunk, duration in zip(chunks, durations):
-        phrases = caption_phrases(chunk)
+        phrases = caption_phrases(chunk, max_chars=28)
         weights = [max(1, len(p.split())) for p in phrases]
         total_weight = sum(weights) or 1
         cursor = offset
         for phrase, weight in zip(phrases, weights):
             segment = duration * weight / total_weight
-            # Keep captions sequential and non-overlapping so they remain visible across players.
             start = max(offset, cursor)
-            end = max(start + 0.35, cursor + segment - 0.03)
-            entries.append((start, end, phrase))
+            end = max(start + 0.45, cursor + segment - 0.02)
+            # ASS override-sensitive characters are escaped before rendering.
+            safe_phrase = phrase.replace("\\", r"\\").replace("{", r"\\{").replace("}", r"\\}")
+            entries.append((start, end, safe_phrase))
             cursor += segment
         offset += duration
+
+    header = """[Script Info]
+Title: Mundo al Día - Subtítulos
+ScriptType: v4.00+
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+PlayResX: 1080
+PlayResY: 1920
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Caption,DejaVu Sans,40,&H00FFFFFF,&H0000FFFF,&H00101828,&HCC081830,-1,0,3,2,0,2,90,90,340,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
     with output_path.open("w", encoding="utf-8") as f:
-        for index, (start, end, phrase) in enumerate(entries, 1):
-            f.write(f"{index}\n{srt_timestamp(start)} --> {srt_timestamp(end)}\n{phrase}\n\n")
+        f.write(header)
+        for start, end, phrase in entries:
+            f.write(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Caption,,0,0,0,,{phrase}\n")
 
 
 def main():
@@ -419,7 +445,7 @@ def main():
     run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat",
          "-safe", "0", "-i", str(audio_list), "-c", "copy", str(audio)])
     # Burn readable Spanish subtitles into the video, timed to the narration.
-    subtitles = OUT / "subtitulos_es.srt"
+    subtitles = OUT / "subtitulos_es.ass"
     write_timed_subtitles(narration_chunks, durations, subtitles)
 
     scene_paths = []
@@ -451,12 +477,8 @@ def main():
         for clip in animated_clips:
             f.write(f"file '{clip.resolve()}'\n")
     video = OUT / "mundo-al-dia-video-original.mp4"
-    subtitle_filter = (
-        f"subtitles=filename='{subtitles.as_posix()}':"
-        "force_style='FontName=DejaVu Sans,FontSize=26,PrimaryColour=&H00FFFFFF,"
-        "OutlineColour=&H00101828,BorderStyle=3,BackColour=&H99081830,"
-        "Outline=1,Shadow=0,Alignment=2,MarginV=260'"
-    )
+    # ASS carries its own explicit 1080x1920 style; avoid fragile SRT force_style parsing.
+    subtitle_filter = f"subtitles=filename='{subtitles.as_posix()}'"
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
         "-f", "concat", "-safe", "0", "-i", str(concat), "-i", str(audio),
