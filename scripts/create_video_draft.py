@@ -393,7 +393,7 @@ def main():
     draw_scene(still, title)
     video = OUT / "mundo-al-dia-video-original.mp4"
     narration_audio = OUT / "narracion-es-MX-JorgeNeural.mp3"
-    narration = re.sub(r"\\s+", " ", (args.narration or args.summary or title).strip())
+    narration = re.sub(r"\s+", " ", (args.narration or args.summary or title).strip())
     if not narration:
         raise RuntimeError("No hay narración en español; no se generará un vídeo silencioso.")
     # Keep the previously approved Spanish neural voice; no subtitles are generated.
