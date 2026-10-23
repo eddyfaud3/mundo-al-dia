@@ -284,19 +284,17 @@ def draw_scene(path, title, body="", index=1, total=1, end_card=False):
         y += line_height
     d.rounded_rectangle((72, y + 8, 220, y + 19), radius=5, fill=CYAN)
 
-    # Image is used only in an unpublished draft; its reuse rights still need review.
-    x0, y0, x1, y1 = 72, max(600, y + 65), 1008, 1540
-    if not PHOTO_PATHS:
-        raise RuntimeError("No se encontró imagen del artículo para el borrador.")
-    photo = Image.open(PHOTO_PATHS[0]).convert("RGB")
-    tw, th = x1 - x0, y1 - y0
-    scale = max(tw / photo.width, th / photo.height)
-    photo = photo.resize((int(photo.width * scale), int(photo.height * scale)), Image.Resampling.LANCZOS)
-    left = (photo.width - tw) // 2
-    top = (photo.height - th) // 2
-    im.paste(photo.crop((left, top, left + tw, top + th)), (x0, y0))
-    d = ImageDraw.Draw(im)
-    d.rectangle((x0, y0, x1, y1), outline=WHITE, width=2)
+    # SIN FOTO: panel gráfico neutral, sin imágenes editoriales ni imágenes ficticias.
+    panel_top = max(600, y + 65)
+    d.rounded_rectangle((72, panel_top, 1008, 1390), radius=34, fill=(6, 29, 62), outline=(43, 198, 220), width=4)
+    # Motivo abstracto de líneas para dar estructura sin representar hechos o lugares.
+    for i in range(7):
+        yy = panel_top + 110 + i * 82
+        d.line((130, yy, 950, yy), fill=(20, 72, 112), width=3)
+    d.ellipse((390, panel_top + 120, 690, panel_top + 420), outline=CYAN, width=8)
+    d.text((540, panel_top + 265), "MAD", font=font(76, True), fill=WHITE, anchor="mm")
+    d.text((540, panel_top + 510), "INFORMACIÓN EN DESARROLLO", font=font(30, True), fill=WHITE, anchor="mm")
+    d.text((540, panel_top + 570), "Sin fotografía · Consulta la fuente original", font=font(22), fill=MUTED, anchor="mm")
     im.save(path, quality=95)
 
 def fit_narration_to_30_seconds(text, max_words=32):
@@ -410,9 +408,14 @@ def main():
                      output_width=900, output_height=330)
 
     global PHOTO_PATHS, PHOTO_CREDITS
-    PHOTO_CREDITS = download_article_images(OUT, args.source_url, max_images=1)
-    PHOTO_PATHS = [item["path"] for item in PHOTO_CREDITS]
-    save_photo_credits(OUT, PHOTO_CREDITS)
+    PHOTO_PATHS = []
+    PHOTO_CREDITS = []
+    (OUT / "FUENTE_Y_LICENCIA_FOTO.txt").write_text(
+        "ESTE VIDEO SE GENERÓ SIN FOTOGRAFÍAS NI IMÁGENES DE TERCEROS.\\n"
+        "Se utiliza únicamente un panel gráfico neutral de Mundo al Día.\\n"
+        "Fuente informativa: " + args.source_url + "\\n",
+        encoding="utf-8"
+    )
 
     still = OUT / "escena_titulo.png"
     draw_scene(still, title)
@@ -466,7 +469,7 @@ def main():
 
     (OUT / "video-metadata.json").write_text(
         json.dumps({"title": title, "source_url": args.source_url,
-                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 78, "overlay_text": "title_only",
+                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 78, "overlay_text": "title_only",\n                    "photo": "none", "visual": "neutral branded graphic; no external photo",
                     "voice": "es-MX-JorgeNeural", "audio": "Spanish narration",
                     "captions": "Spanish SRT burned into video for Facebook and Instagram; compact lower-screen styling"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
     )
@@ -474,7 +477,7 @@ def main():
         "Borrador de vídeo Mundo al Día: 30 segundos con narración en español (voz es-MX-JorgeNeural) y subtítulos españoles visibles integrados en el vídeo.\\n"
         "En pantalla solo aparecen el logotipo y el titular; no se añaden otros textos.\\n"
         f"Artículo original: {args.source_url}\\n"
-        "La licencia de la imagen no se verifica automáticamente. Confirmar permisos antes de publicar.\\n"
+        "El vídeo no contiene fotografías ni imágenes de terceros.\\n"
         "Este archivo NO se publicó en la web, Facebook ni Instagram.\\n",
         encoding="utf-8"
     )
