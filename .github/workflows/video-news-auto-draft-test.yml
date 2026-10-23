@@ -111,7 +111,7 @@ jobs:
           # It is not independent fact-checking and must not be auto-published.
           summary = chosen["summary"]
           narration = (
-              "Última hora. " + chosen["title"] + ". "
+              "Esto es lo que se sabe. " + chosen["title"] + ". "
               "Según la información publicada por " + chosen["source"] + ", " + summary + " "
               "Seguiremos atentos a las actualizaciones de esta noticia. "
               "Mundo al Día. El mundo, al día."
