@@ -341,9 +341,9 @@ def write_timed_subtitles(chunks, durations, output_path):
         cursor = offset
         for phrase, weight in zip(phrases, weights):
             segment = duration * weight / total_weight
-            # Show each caption slightly before the estimated word boundary so it does not lag behind the voice.
-            start = max(0.0, cursor - 0.22)
-            end = max(start + 0.25, cursor + segment - 0.08)
+            # Keep captions sequential and non-overlapping so they remain visible across players.
+            start = max(offset, cursor)
+            end = max(start + 0.35, cursor + segment - 0.03)
             entries.append((start, end, phrase))
             cursor += segment
         offset += duration
@@ -453,9 +453,9 @@ def main():
     video = OUT / "mundo-al-dia-video-original.mp4"
     subtitle_filter = (
         f"subtitles=filename='{subtitles.as_posix()}':"
-        "force_style='FontName=DejaVu Sans,FontSize=22,PrimaryColour=&H00FFFFFF,"
+        "force_style='FontName=DejaVu Sans,FontSize=26,PrimaryColour=&H00FFFFFF,"
         "OutlineColour=&H00101828,BorderStyle=3,BackColour=&H99081830,"
-        "Outline=1,Shadow=0,Alignment=2,MarginV=500'"
+        "Outline=1,Shadow=0,Alignment=2,MarginV=260'"
     )
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
