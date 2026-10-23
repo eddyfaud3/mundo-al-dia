@@ -293,6 +293,25 @@ def draw_scene(path, title, body="", index=1, total=1, end_card=False):
     d.rectangle((x0, y0, x1, y1), outline=WHITE, width=2)
     im.save(path, quality=95)
 
+def fit_narration_to_30_seconds(text, max_words=62):
+    """Keep a concise, complete Spanish narration that fits the 30-second format."""
+    cleaned = re.sub(r"\\s+", " ", text.strip())
+    sentences = re.split(r"(?<=[.!?])\\s+", cleaned)
+    chosen = []
+    for sentence in sentences:
+        candidate = " ".join(chosen + [sentence]).strip()
+        if len(candidate.split()) <= max_words:
+            chosen.append(sentence)
+        else:
+            break
+    if chosen:
+        return " ".join(chosen)
+    words = cleaned.split()[:max_words]
+    if words:
+        return " ".join(words).rstrip(",;:") + "."
+    return "Información en desarrollo."
+
+
 def caption_phrases(text, max_chars=30):
     """Split narration into short, readable caption cards (max two short lines)."""
     words = re.sub(r"\s+", " ", text.strip()).split()
@@ -405,6 +424,17 @@ def main():
     srt_text = subtitles.read_text(encoding="utf-8-sig")
     if "-->" not in srt_text or not re.search(r"\d{2}:\d{2}:\d{2},\d{3}", srt_text):
         raise RuntimeError("El archivo de subtítulos no tiene formato SRT válido; se detiene el borrador.")
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(narration_audio)],
+        check=True, capture_output=True, text=True
+    )
+    audio_seconds = float(probe.stdout.strip())
+    if audio_seconds > 29.5:
+        raise RuntimeError(
+            f"La narración sigue siendo demasiado larga ({audio_seconds:.1f}s); "
+            "se detiene para no cortar la voz al final del vídeo."
+        )
     silent_video = OUT / "video-sin-audio.mp4"
     frames = 30 * 30
     run([
@@ -421,7 +451,7 @@ def main():
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
         "-i", str(silent_video), "-i", str(narration_audio),
-        "-vf", f"subtitles={subtitles.as_posix()}:force_style='FontName=DejaVu Sans,FontSize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00101828,BorderStyle=3,Outline=2,Shadow=0,Alignment=2,MarginV=150'",
+        "-vf", f"subtitles={subtitles.as_posix()}:force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00101828,BorderStyle=3,Outline=1,Shadow=0,Alignment=2,MarginV=190'",
         "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
         "-pix_fmt", "yuv420p", "-af", "apad", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
         "-t", "30", "-movflags", "+faststart", str(video)
@@ -429,9 +459,9 @@ def main():
 
     (OUT / "video-metadata.json").write_text(
         json.dumps({"title": title, "source_url": args.source_url,
-                    "duration_seconds": 30, "overlay_text": "title_only",
+                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 62, "overlay_text": "title_only",
                     "voice": "es-MX-JorgeNeural", "audio": "Spanish narration",
-                    "captions": "Spanish SRT burned into video for Facebook and Instagram"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
+                    "captions": "Spanish SRT burned into video for Facebook and Instagram; compact lower-screen styling"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
     )
     (OUT / "README.txt").write_text(
         "Borrador de vídeo Mundo al Día: 30 segundos con narración en español (voz es-MX-JorgeNeural) y subtítulos españoles visibles integrados en el vídeo.\\n"
@@ -444,7 +474,8 @@ def main():
     print(f"VIDEO_GENERADO={video}")
     print("DURACION_OBJETIVO_SEGUNDOS=30")
     print("VOZ=es-MX-JorgeNeural")
-    print("SUBTITULOS=SRT_GENERADO")
+    print(f"DURACION_NARRACION_SEGUNDOS={audio_seconds:.2f}")
+    print("SUBTITULOS=INTEGRADOS_EN_VIDEO")
     print("PUBLICADO=NO")
 
 
