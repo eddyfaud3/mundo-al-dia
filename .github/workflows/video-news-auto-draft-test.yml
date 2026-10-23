@@ -20,10 +20,12 @@ jobs:
       - name: Descargar el código de la rama de prueba
         uses: actions/checkout@v4
 
+      - name: Instalar FFmpeg rápidamente
+        uses: AnimMouse/setup-ffmpeg@v1
+
       - name: Instalar dependencias de vídeo
         run: |
           set -euo pipefail
-          # GitHub's Ubuntu runner normally includes FFmpeg; avoid slow apt downloads.
           ffmpeg -version
           python -m pip install --disable-pip-version-check --retries 2 --timeout 20 pillow edge-tts CairoSVG
           python -c "import cairosvg; print('CairoSVG OK:', cairosvg.__version__)"
