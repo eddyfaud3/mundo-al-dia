@@ -392,6 +392,14 @@ def main():
     still = OUT / "escena_titulo.png"
     draw_scene(still, title)
     video = OUT / "mundo-al-dia-video-original.mp4"
+    narration_audio = OUT / "narracion-es-MX-JorgeNeural.mp3"
+    narration = re.sub(r"\\s+", " ", (args.narration or args.summary or title).strip())
+    if not narration:
+        raise RuntimeError("No hay narración en español; no se generará un vídeo silencioso.")
+    # Keep the previously approved Spanish neural voice; no subtitles are generated.
+    run(["edge-tts", "--voice", "es-MX-JorgeNeural", "--rate=+12%", "--text", narration,
+         "--write-media", str(narration_audio)])
+    silent_video = OUT / "video-sin-audio.mp4"
     frames = 30 * 30
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
@@ -399,17 +407,25 @@ def main():
         "-vf", "zoompan=z='min(1.0+0.00004*on,1.035)':x='max(0,min(iw-iw/zoom,(iw-iw/zoom)/2+5*sin(on/55)))':y='max(0,min(ih-ih/zoom,(ih-ih/zoom)/2+5*cos(on/67)))':d=1:s=1080x1920:fps=30,format=yuv420p",
         "-frames:v", str(frames), "-an",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-        "-pix_fmt", "yuv420p", "-t", "30", "-movflags", "+faststart", str(video)
+        "-pix_fmt", "yuv420p", "-t", "30", "-movflags", "+faststart", str(silent_video)
+    ])
+    # Preserve exactly 30 seconds and the approved narration voice; never burn captions into the image.
+    run([
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        "-i", str(silent_video), "-i", str(narration_audio),
+        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+        "-af", "apad", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
+        "-t", "30", "-movflags", "+faststart", str(video)
     ])
 
     (OUT / "video-metadata.json").write_text(
         json.dumps({"title": title, "source_url": args.source_url,
                     "duration_seconds": 30, "overlay_text": "title_only",
-                    "audio": "none", "captions": "none"},
-                   ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
+                    "voice": "es-MX-JorgeNeural", "audio": "Spanish narration",
+                    "captions": "none"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
     )
     (OUT / "README.txt").write_text(
-        "Borrador de vídeo Mundo al Día: 30 segundos, sin voz ni subtítulos.\\n"
+        "Borrador de vídeo Mundo al Día: 30 segundos con narración en español (voz es-MX-JorgeNeural), sin subtítulos.\\n"
         "En pantalla solo aparecen el logotipo y el titular; no se añaden otros textos.\\n"
         f"Artículo original: {args.source_url}\\n"
         "La licencia de la imagen no se verifica automáticamente. Confirmar permisos antes de publicar.\\n"
@@ -418,7 +434,7 @@ def main():
     )
     print(f"VIDEO_GENERADO={video}")
     print("DURACION_OBJETIVO_SEGUNDOS=30")
-    print("AUDIO=NO")
+    print("VOZ=es-MX-JorgeNeural")
     print("SUBTITULOS=NO")
     print("PUBLICADO=NO")
 
