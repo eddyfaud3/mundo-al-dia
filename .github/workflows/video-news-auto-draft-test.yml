@@ -1,4 +1,5 @@
 name: Video automático desde noticias — borrador de prueba (NO PUBLICA)
+# Safe test mode: drafts require human editorial verification and are never published.
 
 on:
   push:
