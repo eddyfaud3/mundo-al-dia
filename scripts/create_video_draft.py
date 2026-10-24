@@ -306,7 +306,7 @@ def draw_scene(path, title, body="", index=1, total=1, end_card=False):
         raise RuntimeError("Falta el resumen editorial para mostrar debajo de la fotografía.")
     summary_top = y1 + 52
     summary_font = font(30, False)
-    lines = wrap_by_pixels(d, summary, summary_font, 900)
+    lines = wrap_by_pixels(d, summary, summary_font, 840)
     max_lines = 8
     if len(lines) > max_lines:
         lines = lines[:max_lines]
