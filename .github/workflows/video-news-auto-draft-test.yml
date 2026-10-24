@@ -218,7 +218,7 @@ jobs:
           La coincidencia entre titulares es solo una señal inicial; no verifica cada afirmación.
           Estado editorial: CORROBORACIÓN PRELIMINAR; REVISIÓN HUMANA OBLIGATORIA.
           Comprobar cifras, nombres, fecha, contexto y abrir ambas fuentes antes de publicar.
-          El vídeo de prueba se genera sin fotos ni imágenes de terceros.
+          El vídeo usa una foto extraída del artículo original para el borrador; sus derechos/licencia deben verificarse manualmente antes de publicar. La narración va sin subtítulos.
           Este flujo no publica ni llama a Railway, Facebook o Instagram.
           EOF
 
