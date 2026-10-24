@@ -465,8 +465,9 @@ def main():
     if not summary:
         raise RuntimeError("El resumen verificado es obligatorio para el diseño del vídeo.")
     video = OUT / "mundo-al-dia-video-original.mp4"
-    narration = re.sub(r"\\s+", " ", (args.narration or summary or title).strip())
-    narration = fit_narration_to_30_seconds(narration, max_words=78)
+    narration = re.sub(r"\\s+", " ", summary).strip()
+    if not narration:
+        raise RuntimeError("La narración debe ser exactamente el mismo texto que aparece debajo de la fotografía.")
     if not narration:
         raise RuntimeError("No hay narración en español; no se generará un vídeo silencioso.")
     # Rotate between male/female Spanish neural voices, consistently per story.
@@ -483,11 +484,10 @@ def main():
         check=True, capture_output=True, text=True
     )
     audio_seconds = float(probe.stdout.strip())
-    if audio_seconds > 29.5:
-        raise RuntimeError(
-            f"La narración sigue siendo demasiado larga ({audio_seconds:.1f}s); "
-            "se detiene para no cortar la voz al final del vídeo."
-        )
+    if audio_seconds > 120:
+        raise RuntimeError(f"La narración es demasiado larga ({audio_seconds:.1f}s); máximo permitido: 120 segundos.")
+    scene_seconds = max(6.0, (audio_seconds + 1.5) / 3.0)
+    scene_frames = int(scene_seconds * 30)
     # Three different editorial panels use text extracted from this news summary.
     cards = split_summary_cards(summary, 3)
     labels = ["LO ESENCIAL", "QUÉ SE SABE", "LO QUE SIGUE"]
@@ -519,7 +519,7 @@ def main():
 
     (OUT / "video-metadata.json").write_text(
         json.dumps({"title": title, "source_url": args.source_url,
-                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 78, "overlay_text": "three_story_specific_editorial_cards",
+                    "duration_seconds": round(scene_seconds * 3, 2), "narration_duration_seconds": round(audio_seconds, 2), "narration_text_matches_overlay": True, "overlay_text": "three_story_specific_editorial_cards",
                     "photo": "one image extracted from the exact source article; rights require manual clearance", "visual": "branded news layout with headline, article photo, on-screen summary and subtle Ken Burns motion",
                     "voice": selected_voice, "voice_rotation": voices, "audio": "Spanish narration",
                     "captions": "none; Spanish narration only"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
@@ -533,7 +533,7 @@ def main():
         encoding="utf-8"
     )
     print(f"VIDEO_GENERADO={video}")
-    print("DURACION_OBJETIVO_SEGUNDOS=30")
+    print(f"DURACION_VIDEO_SEGUNDOS={scene_seconds * 3:.2f}")
     print(f"VOZ={selected_voice}")
     print(f"DURACION_NARRACION_SEGUNDOS={audio_seconds:.2f}")
     print("SUBTITULOS=NO")
