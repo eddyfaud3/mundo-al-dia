@@ -307,15 +307,14 @@ def draw_scene(path, title, body="", index=1, total=1, end_card=False):
     summary_top = y1 + 52
     summary_font = font(30, False)
     lines = wrap_by_pixels(d, summary, summary_font, 840)
-    max_lines = 8
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-        last = lines[-1]
-        while last and d.textbbox((0, 0), last + "…", font=summary_font)[2] > 900:
-            last = last.rsplit(" ", 1)[0] if " " in last else last[:-1]
-        lines[-1] = last.rstrip(" ,;:") + "…"
     line_h = 43
-    panel_bottom = min(1745, summary_top + 58 + len(lines) * line_h)
+    # Never silently cut a sentence: shrink the type until the complete card fits.
+    while len(lines) * line_h > (1745 - summary_top - 72) and summary_font.size > 22:
+        summary_font = font(summary_font.size - 2, False)
+        lines = wrap_by_pixels(d, summary, summary_font, 840)
+    if len(lines) * line_h > (1745 - summary_top - 72):
+        raise RuntimeError("El texto completo no cabe en la tarjeta; se detiene para evitar frases cortadas.")
+    panel_bottom = summary_top + 58 + len(lines) * line_h
     d.rounded_rectangle((72, summary_top - 20, 1008, panel_bottom), radius=22,
                         fill=(5, 24, 53), outline=(43, 198, 220), width=2)
     yy = summary_top + 8
@@ -422,22 +421,20 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 
 def split_summary_cards(text, count=3):
-    """Create distinct editorial text panels from the actual story, never timed subtitles."""
-    clean = re.sub(r"\\s+", " ", text.strip())
-    sentences = re.split(r"(?<=[.!?])\\s+", clean)
-    sentences = [s.strip() for s in sentences if s.strip()]
+    """Split on real sentence boundaries so no card ends halfway through a sentence."""
+    clean = re.sub(r"\s+", " ", text.strip())
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", clean) if s.strip()]
     if len(sentences) >= count:
+        # Keep complete sentences together, distributing them as evenly as possible.
         groups = [[] for _ in range(count)]
         for i, sentence in enumerate(sentences):
             groups[min(count - 1, i * count // len(sentences))].append(sentence)
-        cards = [" ".join(group) for group in groups if group]
+        cards = [" ".join(group) for group in groups]
     else:
+        # If the editor supplied fewer sentences, divide only at word boundaries.
         words = clean.split()
         cards = [" ".join(words[round(i * len(words) / count):round((i + 1) * len(words) / count)]) for i in range(count)]
-        cards = [x for x in cards if x]
-    while len(cards) < count:
-        cards.append(cards[-1] if cards else "Información en desarrollo.")
-    return cards[:count]
+    return [card for card in cards if card]
 
 
 def main():
