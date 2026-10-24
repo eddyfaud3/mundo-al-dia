@@ -244,7 +244,7 @@ def draw_visual(im, d, body, index):
 
 
 def draw_scene(path, title, body="", index=1, total=1, end_card=False):
-    """Create a clean vertical visual: official logo, headline, and article photo only."""
+    """Create the reference-style vertical news card with a real article image and readable summary."""
     im = Image.new("RGB", (W, H))
     px = im.load()
     for y in range(H):
@@ -253,9 +253,9 @@ def draw_scene(path, title, body="", index=1, total=1, end_card=False):
         for x in range(W):
             px[x, y] = c
     d = ImageDraw.Draw(im)
-    d.rectangle((0, 0, W, 22), fill=CYAN)
-    d.ellipse((760, -190, 1260, 310), outline=(35, 112, 165), width=5)
-    d.ellipse((-220, 1400, 220, 1840), outline=(35, 112, 165), width=5)
+    d.rectangle((0, 0, W, 20), fill=CYAN)
+    d.ellipse((790, -190, 1280, 300), outline=(35, 112, 165), width=5)
+    d.ellipse((-220, 1510, 220, 1950), outline=(35, 112, 165), width=5)
 
     logo_path = OUT / "logo-mundo-al-dia.png"
     if logo_path.exists():
@@ -266,35 +266,68 @@ def draw_scene(path, title, body="", index=1, total=1, end_card=False):
         im.paste(plate, (54, 42), plate)
         d = ImageDraw.Draw(im)
 
-    title_font = font(42, True)
-    title_lines = wrap_by_pixels(d, title, title_font, 920)
-    while len(title_lines) > 3 and title_font.size > 30:
+    d.text((72, 225), "NOTICIAS INTERNACIONALES", font=font(23, True), fill=CYAN)
+    title_font = font(45, True)
+    title_lines = wrap_by_pixels(d, title, title_font, 930)
+    while len(title_lines) > 3 and title_font.size > 32:
         title_font = font(title_font.size - 2, True)
-        title_lines = wrap_by_pixels(d, title, title_font, 920)
+        title_lines = wrap_by_pixels(d, title, title_font, 930)
     if len(title_lines) > 3:
         title_lines = title_lines[:3]
         last = title_lines[-1]
-        while last and d.textbbox((0, 0), last + "…", font=title_font)[2] > 920:
+        while last and d.textbbox((0, 0), last + "…", font=title_font)[2] > 930:
             last = last.rsplit(" ", 1)[0] if " " in last else last[:-1]
         title_lines[-1] = last.rstrip(" ,;:") + "…"
-    y = 245
-    line_height = title_font.size + 18
+    y = 275
     for line in title_lines:
         d.text((72, y), line, font=title_font, fill=WHITE)
-        y += line_height
-    d.rounded_rectangle((72, y + 8, 220, y + 19), radius=5, fill=CYAN)
+        y += title_font.size + 16
+    d.rounded_rectangle((72, y + 5, 235, y + 16), radius=5, fill=CYAN)
 
-    # SIN FOTO: panel gráfico neutral, sin imágenes editoriales ni imágenes ficticias.
-    panel_top = max(600, y + 65)
-    d.rounded_rectangle((72, panel_top, 1008, 1390), radius=34, fill=(6, 29, 62), outline=(43, 198, 220), width=4)
-    # Motivo abstracto de líneas para dar estructura sin representar hechos o lugares.
-    for i in range(7):
-        yy = panel_top + 110 + i * 82
-        d.line((130, yy, 950, yy), fill=(20, 72, 112), width=3)
-    d.ellipse((390, panel_top + 120, 690, panel_top + 420), outline=CYAN, width=8)
-    d.text((540, panel_top + 265), "MAD", font=font(76, True), fill=WHITE, anchor="mm")
-    d.text((540, panel_top + 510), "INFORMACIÓN EN DESARROLLO", font=font(30, True), fill=WHITE, anchor="mm")
-    d.text((540, panel_top + 570), "Sin fotografía · Consulta la fuente original", font=font(22), fill=MUTED, anchor="mm")
+    # Use only the image extracted from this exact article page. Rights remain a separate manual check.
+    if not PHOTO_PATHS:
+        raise RuntimeError("No se encontró una foto del artículo original; se detiene el vídeo.")
+    photo_path = Path(PHOTO_PATHS[0])
+    if not photo_path.is_file():
+        raise RuntimeError("No está disponible la foto extraída del artículo original.")
+    photo = Image.open(photo_path).convert("RGB")
+    x0, y0, x1, y1 = 72, max(470, y + 55), 1008, max(940, y + 525)
+    target_w, target_h = x1 - x0, y1 - y0
+    scale = max(target_w / photo.width, target_h / photo.height)
+    photo = photo.resize((int(photo.width * scale), int(photo.height * scale)), Image.Resampling.LANCZOS)
+    left = (photo.width - target_w) // 2
+    top = (photo.height - target_h) // 2
+    im.paste(photo.crop((left, top, left + target_w, top + target_h)), (x0, y0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((x0, y0, x1, y1), radius=18, outline=CYAN, width=5)
+
+    summary = re.sub(r"\s+", " ", body.strip())
+    if not summary:
+        raise RuntimeError("Falta el resumen editorial para mostrar debajo de la fotografía.")
+    summary_top = y1 + 52
+    summary_font = font(30, False)
+    lines = wrap_by_pixels(d, summary, summary_font, 900)
+    max_lines = 8
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        last = lines[-1]
+        while last and d.textbbox((0, 0), last + "…", font=summary_font)[2] > 900:
+            last = last.rsplit(" ", 1)[0] if " " in last else last[:-1]
+        lines[-1] = last.rstrip(" ,;:") + "…"
+    line_h = 43
+    panel_bottom = min(1745, summary_top + 58 + len(lines) * line_h)
+    d.rounded_rectangle((72, summary_top - 20, 1008, panel_bottom), radius=22,
+                        fill=(5, 24, 53), outline=(43, 198, 220), width=2)
+    yy = summary_top + 8
+    for line in lines:
+        d.text((112, yy), line, font=summary_font, fill=WHITE)
+        yy += line_h
+
+    footer_y = 1815
+    d.line((72, footer_y - 28, 1008, footer_y - 28), fill=CYAN, width=3)
+    d.text((72, footer_y), "INFORMACIÓN EN ESPAÑOL · MUNDO AL DÍA",
+           font=font(21, True), fill=MUTED)
+    d.text((1008, footer_y), f"{index:02d}", font=font(22, True), fill=CYAN, anchor="ra")
     im.save(path, quality=95)
 
 def fit_narration_to_30_seconds(text, max_words=32):
@@ -408,32 +441,24 @@ def main():
                      output_width=900, output_height=330)
 
     global PHOTO_PATHS, PHOTO_CREDITS
-    PHOTO_PATHS = []
-    PHOTO_CREDITS = []
-    (OUT / "FUENTE_Y_LICENCIA_FOTO.txt").write_text(
-        "ESTE VIDEO SE GENERÓ SIN FOTOGRAFÍAS NI IMÁGENES DE TERCEROS.\\n"
-        "Se utiliza únicamente un panel gráfico neutral de Mundo al Día.\\n"
-        "Fuente informativa: " + args.source_url + "\\n",
-        encoding="utf-8"
-    )
+    PHOTO_CREDITS = download_article_images(OUT, args.source_url, max_images=1)
+    PHOTO_PATHS = [str(item["path"]) for item in PHOTO_CREDITS]
+    save_photo_credits(OUT, PHOTO_CREDITS)
 
+    summary = re.sub(r"\s+", " ", args.summary.strip())
+    if not summary:
+        raise RuntimeError("El resumen verificado es obligatorio para el diseño del vídeo.")
     still = OUT / "escena_titulo.png"
-    draw_scene(still, title)
+    draw_scene(still, title, summary)
     video = OUT / "mundo-al-dia-video-original.mp4"
     narration_audio = OUT / "narracion-es-MX-JorgeNeural.mp3"
-    narration = re.sub(r"\s+", " ", (args.narration or args.summary or title).strip())
+    narration = re.sub(r"\s+", " ", (args.narration or summary or title).strip())
     narration = fit_narration_to_30_seconds(narration, max_words=78)
     if not narration:
         raise RuntimeError("No hay narración en español; no se generará un vídeo silencioso.")
-    # Keep the approved Spanish neural voice and ask edge-tts for timed SRT captions.
-    subtitles = OUT / "subtitulos-es.srt"
+    # Spanish voice only: no SRT/VTT is created and no subtitles are burned into the video.
     run(["edge-tts", "--voice", "es-MX-JorgeNeural", "--rate=+12%", "--text", narration,
-         "--write-media", str(narration_audio), "--write-subtitles", str(subtitles)])
-    if not subtitles.is_file() or subtitles.stat().st_size < 20:
-        raise RuntimeError("No se generó un archivo SRT de subtítulos válido; se detiene el borrador.")
-    srt_text = subtitles.read_text(encoding="utf-8-sig")
-    if "-->" not in srt_text or not re.search(r"\d{2}:\d{2}:\d{2},\d{3}", srt_text):
-        raise RuntimeError("El archivo de subtítulos no tiene formato SRT válido; se detiene el borrador.")
+         "--write-media", str(narration_audio)])
     probe = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration",
          "-of", "default=noprint_wrappers=1:nokey=1", str(narration_audio)],
@@ -450,35 +475,31 @@ def main():
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
         "-loop", "1", "-i", str(still),
-        "-vf", "zoompan=z='min(1.0+0.00004*on,1.035)':x='max(0,min(iw-iw/zoom,(iw-iw/zoom)/2+5*sin(on/55)))':y='max(0,min(ih-ih/zoom,(ih-ih/zoom)/2+5*cos(on/67)))':d=1:s=1080x1920:fps=30,format=yuv420p",
+        "-vf", "zoompan=z='min(1.0+0.00008*on,1.06)':x='max(0,min(iw-iw/zoom,(iw-iw/zoom)/2+9*sin(on/55)))':y='max(0,min(ih-ih/zoom,(ih-ih/zoom)/2+9*cos(on/67)))':d=1:s=1080x1920:fps=30,format=yuv420p",
         "-frames:v", str(frames), "-an",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
         "-pix_fmt", "yuv420p", "-t", "30", "-movflags", "+faststart", str(silent_video)
     ])
-    # Burn the timed Spanish SRT captions into the picture so they remain visible
-    # on both Facebook and Instagram, independent of each platform's caption settings.
-    # Keep the narration audio and exact 30-second vertical video.
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
         "-i", str(silent_video), "-i", str(narration_audio),
-        "-vf", f"subtitles={subtitles.as_posix()}:force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00101828,BorderStyle=3,Outline=1,Shadow=0,Alignment=2,MarginV=190'",
-        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-        "-pix_fmt", "yuv420p", "-af", "apad", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
+        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+        "-af", "apad", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
         "-t", "30", "-movflags", "+faststart", str(video)
     ])
 
     (OUT / "video-metadata.json").write_text(
         json.dumps({"title": title, "source_url": args.source_url,
                     "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 78, "overlay_text": "title_only",
-                    "photo": "none", "visual": "neutral branded graphic; no external photo",
+                    "photo": "one image extracted from the exact source article; rights require manual clearance", "visual": "branded news layout with headline, article photo, on-screen summary and subtle Ken Burns motion",
                     "voice": "es-MX-JorgeNeural", "audio": "Spanish narration",
-                    "captions": "Spanish SRT burned into video for Facebook and Instagram; compact lower-screen styling"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
+                    "captions": "none; Spanish narration only"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
     )
     (OUT / "README.txt").write_text(
-        "Borrador de vídeo Mundo al Día: 30 segundos con narración en español (voz es-MX-JorgeNeural) y subtítulos españoles visibles integrados en el vídeo.\\n"
-        "En pantalla solo aparecen el logotipo y el titular; no se añaden otros textos.\\n"
+        "Borrador de vídeo Mundo al Día: diseño vertical con logotipo, titular, fotografía del artículo y resumen visible.\\n"
+        "Incluye narración en español (voz es-MX-JorgeNeural), sin subtítulos.\\n"
         f"Artículo original: {args.source_url}\\n"
-        "El vídeo no contiene fotografías ni imágenes de terceros.\\n"
+        "IMPORTANTE: la foto se extrajo de la página del artículo, pero sus derechos/licencia deben verificarse antes de publicar.\\n"
         "Este archivo NO se publicó en la web, Facebook ni Instagram.\\n",
         encoding="utf-8"
     )
@@ -486,7 +507,8 @@ def main():
     print("DURACION_OBJETIVO_SEGUNDOS=30")
     print("VOZ=es-MX-JorgeNeural")
     print(f"DURACION_NARRACION_SEGUNDOS={audio_seconds:.2f}")
-    print("SUBTITULOS=INTEGRADOS_EN_VIDEO")
+    print("SUBTITULOS=NO")
+    print("FOTO=EXTRAIDA_DEL_ARTICULO_ORIGINAL; DERECHOS_PENDIENTES_DE_REVISION")
     print("PUBLICADO=NO")
 
 
