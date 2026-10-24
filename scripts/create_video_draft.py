@@ -421,6 +421,25 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f.write(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Caption,,0,0,0,,{phrase}\n")
 
 
+def split_summary_cards(text, count=3):
+    """Create distinct editorial text panels from the actual story, never timed subtitles."""
+    clean = re.sub(r"\\s+", " ", text.strip())
+    sentences = re.split(r"(?<=[.!?])\\s+", clean)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    if len(sentences) >= count:
+        groups = [[] for _ in range(count)]
+        for i, sentence in enumerate(sentences):
+            groups[min(count - 1, i * count // len(sentences))].append(sentence)
+        cards = [" ".join(group) for group in groups if group]
+    else:
+        words = clean.split()
+        cards = [" ".join(words[round(i * len(words) / count):round((i + 1) * len(words) / count)]) for i in range(count)]
+        cards = [x for x in cards if x]
+    while len(cards) < count:
+        cards.append(cards[-1] if cards else "Información en desarrollo.")
+    return cards[:count]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--title", required=True)
@@ -448,16 +467,18 @@ def main():
     summary = re.sub(r"\s+", " ", args.summary.strip())
     if not summary:
         raise RuntimeError("El resumen verificado es obligatorio para el diseño del vídeo.")
-    still = OUT / "escena_titulo.png"
-    draw_scene(still, title, summary)
     video = OUT / "mundo-al-dia-video-original.mp4"
-    narration_audio = OUT / "narracion-es-MX-JorgeNeural.mp3"
-    narration = re.sub(r"\s+", " ", (args.narration or summary or title).strip())
+    narration = re.sub(r"\\s+", " ", (args.narration or summary or title).strip())
     narration = fit_narration_to_30_seconds(narration, max_words=78)
     if not narration:
         raise RuntimeError("No hay narración en español; no se generará un vídeo silencioso.")
-    # Spanish voice only: no SRT/VTT is created and no subtitles are burned into the video.
-    run(["edge-tts", "--voice", "es-MX-JorgeNeural", "--rate=+12%", "--text", narration,
+    # Rotate between male/female Spanish neural voices, consistently per story.
+    voices = ["es-MX-JorgeNeural", "es-MX-DaliaNeural", "es-ES-AlvaroNeural", "es-ES-ElviraNeural"]
+    voice_index = int(hashlib.sha256((title + args.source_url).encode("utf-8")).hexdigest()[:8], 16) % len(voices)
+    selected_voice = voices[voice_index]
+    narration_audio = OUT / ("narracion-" + selected_voice + ".mp3")
+    # No subtitles: these are editorial story panels, not synchronized captions.
+    run(["edge-tts", "--voice", selected_voice, "--rate=+8%", "--text", narration,
          "--write-media", str(narration_audio)])
     probe = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -470,16 +491,27 @@ def main():
             f"La narración sigue siendo demasiado larga ({audio_seconds:.1f}s); "
             "se detiene para no cortar la voz al final del vídeo."
         )
+    # Three different editorial panels use text extracted from this news summary.
+    cards = split_summary_cards(summary, 3)
+    labels = ["LO ESENCIAL", "QUÉ SE SABE", "LO QUE SIGUE"]
+    segment_paths = []
+    for idx, (card_text, label) in enumerate(zip(cards, labels), 1):
+        still = OUT / f"escena_noticia_{idx}.png"
+        draw_scene(still, title, label + ": " + card_text, index=idx)
+        segment = OUT / f"segmento_{idx}.mp4"
+        run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-loop", "1", "-i", str(still),
+            "-vf", "zoompan=z='min(1.0+0.00008*on,1.06)':x='max(0,min(iw-iw/zoom,(iw-iw/zoom)/2+9*sin(on/55)))':y='max(0,min(ih-ih/zoom,(ih-ih/zoom)/2+9*cos(on/67)))':d=1:s=1080x1920:fps=30,format=yuv420p",
+            "-frames:v", "300", "-an", "-c:v", "libx264", "-preset", "veryfast",
+            "-crf", "23", "-pix_fmt", "yuv420p", "-t", "10", "-movflags", "+faststart", str(segment)
+        ])
+        segment_paths.append(segment)
+    concat_list = OUT / "segmentos.txt"
+    concat_list.write_text("".join("file '" + p.resolve().as_posix() + "'\\n" for p in segment_paths), encoding="utf-8")
     silent_video = OUT / "video-sin-audio.mp4"
-    frames = 30 * 30
-    run([
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-        "-loop", "1", "-i", str(still),
-        "-vf", "zoompan=z='min(1.0+0.00008*on,1.06)':x='max(0,min(iw-iw/zoom,(iw-iw/zoom)/2+9*sin(on/55)))':y='max(0,min(ih-ih/zoom,(ih-ih/zoom)/2+9*cos(on/67)))':d=1:s=1080x1920:fps=30,format=yuv420p",
-        "-frames:v", str(frames), "-an",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-        "-pix_fmt", "yuv420p", "-t", "30", "-movflags", "+faststart", str(silent_video)
-    ])
+    run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat",
+         "-safe", "0", "-i", str(concat_list), "-c", "copy", str(silent_video)])
     run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
         "-i", str(silent_video), "-i", str(narration_audio),
@@ -490,9 +522,9 @@ def main():
 
     (OUT / "video-metadata.json").write_text(
         json.dumps({"title": title, "source_url": args.source_url,
-                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 78, "overlay_text": "headline_and_article_summary",
+                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 78, "overlay_text": "three_story_specific_editorial_cards",
                     "photo": "one image extracted from the exact source article; rights require manual clearance", "visual": "branded news layout with headline, article photo, on-screen summary and subtle Ken Burns motion",
-                    "voice": "es-MX-JorgeNeural", "audio": "Spanish narration",
+                    "voice": selected_voice, "voice_rotation": voices, "audio": "Spanish narration",
                     "captions": "none; Spanish narration only"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
     )
     (OUT / "README.txt").write_text(
@@ -505,7 +537,7 @@ def main():
     )
     print(f"VIDEO_GENERADO={video}")
     print("DURACION_OBJETIVO_SEGUNDOS=30")
-    print("VOZ=es-MX-JorgeNeural")
+    print(f"VOZ={selected_voice}")
     print(f"DURACION_NARRACION_SEGUNDOS={audio_seconds:.2f}")
     print("SUBTITULOS=NO")
     print("FOTO=EXTRAIDA_DEL_ARTICULO_ORIGINAL; DERECHOS_PENDIENTES_DE_REVISION")
