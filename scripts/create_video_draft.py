@@ -500,8 +500,8 @@ def main():
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-loop", "1", "-i", str(still),
             "-vf", "zoompan=z='min(1.0+0.00008*on,1.06)':x='max(0,min(iw-iw/zoom,(iw-iw/zoom)/2+9*sin(on/55)))':y='max(0,min(ih-ih/zoom,(ih-ih/zoom)/2+9*cos(on/67)))':d=1:s=1080x1920:fps=30,format=yuv420p",
-            "-frames:v", "300", "-an", "-c:v", "libx264", "-preset", "veryfast",
-            "-crf", "23", "-pix_fmt", "yuv420p", "-t", "10", "-movflags", "+faststart", str(segment)
+            "-frames:v", str(scene_frames), "-an", "-c:v", "libx264", "-preset", "veryfast",
+            "-crf", "23", "-pix_fmt", "yuv420p", "-t", str(scene_seconds), "-movflags", "+faststart", str(segment)
         ])
         segment_paths.append(segment)
     concat_list = OUT / "segmentos.txt"
@@ -514,7 +514,7 @@ def main():
         "-i", str(silent_video), "-i", str(narration_audio),
         "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
         "-af", "apad", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
-        "-t", "30", "-movflags", "+faststart", str(video)
+        "-t", str(scene_seconds * 3), "-movflags", "+faststart", str(video)
     ])
 
     (OUT / "video-metadata.json").write_text(
