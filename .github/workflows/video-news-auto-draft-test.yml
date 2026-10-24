@@ -114,10 +114,12 @@ jobs:
           print("Noticias RSS recientes:", len(candidates))
           print("Noticias con coincidencia preliminar entre fuentes:", len(corroborated))
           chosen = None
-          # Select a recent story whose own article page is reachable and matches its RSS title.
-          # Independent cross-source matches are recorded when available, but absence of a
-          # title match sends the draft to human review; it does not label the story false.
+          # HARD EDITORIAL GATE: do not create a video unless a second,
+          # independent publisher has a recent matching report. A single-source
+          # story is held back, not converted into a publishable draft.
           for story in candidates[:12]:
+              if not corroborated.get(story["url"]):
+                  continue
               try:
                   req = urllib.request.Request(story["url"], headers={"User-Agent": "Mozilla/5.0 (compatible; MundoAlDiaDraftTest/1.0)", "Accept": "text/html"})
                   with urllib.request.urlopen(req, timeout=15) as response:
@@ -143,7 +145,7 @@ jobs:
               except Exception:
                   continue
           if not chosen:
-              raise SystemExit("Ninguna noticia superó la corroboración preliminar en una segunda fuente independiente y las comprobaciones de página/título. No se generó vídeo.")
+              raise SystemExit("BLOQUEADO: ninguna noticia de las últimas 72 horas tiene una coincidencia preliminar con una segunda fuente independiente y una página original accesible. No se generó vídeo ni se publicó nada.")
           # Narration is a cautious, source-attributed draft based ONLY on the RSS summary.
           # It is not independent fact-checking and must not be auto-published.
           summary = chosen["summary"]
@@ -161,8 +163,9 @@ jobs:
               "source_url": chosen["final_url"],
               "published": chosen["published"],
               "preliminary_corroboration": corroborated.get(chosen["url"], []),
-              "verification_status": "PENDIENTE_DE_VERIFICACION_HUMANA",
-              "warning": "La selección comprueba fuente RSS, fecha y página original. La coincidencia entre titulares es preliminar; no verifica cada hecho. Revisar cifras, nombres, contexto y segunda fuente fiable antes de publicar. Borrador no publicable automáticamente."
+              "verification_status": "CORROBORACION_PRELIMINAR_DOS_FUENTES_PENDIENTE_REVISION_HUMANA",
+              "warning": "Dos medios independientes publicaron titulares con coincidencia preliminar y se comprobó la página original. Esto NO verifica cada afirmación ni sustituye la revisión editorial humana. Revisar cifras, nombres, fechas, contexto y enlaces de ambas fuentes antes de publicar. Borrador no publicable automáticamente.",
+              "segunda_fuente_independiente": corroborated[chosen["url"]]
           }
           Path("story.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
           print("Noticia elegida:", chosen["title"])
@@ -211,9 +214,10 @@ jobs:
           BORRADOR AUTOMÁTICO — NO PUBLICADO.
           Este flujo no llama a Railway, Facebook ni Instagram.
           La selección automática comprueba RSS reciente, fecha y página HTTP/HTML de la fuente.
-          La coincidencia entre titulares de distintas fuentes es preliminar y puede no existir.
-          Estado editorial: PENDIENTE DE VERIFICACIÓN HUMANA.
-          Comprobar cifras, nombres, fecha, contexto y una segunda fuente fiable antes de publicar.
+          BLOQUEO: no se genera vídeo si no hay coincidencia preliminar con una segunda fuente independiente.
+          La coincidencia entre titulares es solo una señal inicial; no verifica cada afirmación.
+          Estado editorial: CORROBORACIÓN PRELIMINAR; REVISIÓN HUMANA OBLIGATORIA.
+          Comprobar cifras, nombres, fecha, contexto y abrir ambas fuentes antes de publicar.
           El vídeo de prueba se genera sin fotos ni imágenes de terceros.
           Este flujo no publica ni llama a Railway, Facebook o Instagram.
           EOF
