@@ -508,7 +508,7 @@ def main():
         ])
         segment_paths.append(segment)
     concat_list = OUT / "segmentos.txt"
-    concat_list.write_text("".join("file '" + p.resolve().as_posix() + "'\\n" for p in segment_paths), encoding="utf-8")
+    concat_list.write_text("".join("file '" + p.resolve().as_posix() + "'\n" for p in segment_paths), encoding="utf-8")
     silent_video = OUT / "video-sin-audio.mp4"
     run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat",
          "-safe", "0", "-i", str(concat_list), "-c", "copy", str(silent_video)])
