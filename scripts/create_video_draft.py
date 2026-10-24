@@ -490,7 +490,7 @@ def main():
 
     (OUT / "video-metadata.json").write_text(
         json.dumps({"title": title, "source_url": args.source_url,
-                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 78, "overlay_text": "title_only",
+                    "duration_seconds": 30, "narration_duration_seconds": round(audio_seconds, 2), "narration_word_limit": 78, "overlay_text": "headline_and_article_summary",
                     "photo": "one image extracted from the exact source article; rights require manual clearance", "visual": "branded news layout with headline, article photo, on-screen summary and subtle Ken Burns motion",
                     "voice": "es-MX-JorgeNeural", "audio": "Spanish narration",
                     "captions": "none; Spanish narration only"}, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8"
