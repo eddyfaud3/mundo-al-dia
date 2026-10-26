@@ -1,91 +1,96 @@
 #!/usr/bin/env python3
-"""Create a Mundo al Día video draft from a recent direct publisher RSS item."""
-import html
+"""Create a video using only the latest published Mundo al Día article."""
+import json
+import os
 import re
 import subprocess
 import sys
 import urllib.request
-import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
-from email.utils import parsedate_to_datetime
 
-FEEDS = [
-    "https://rss.dw.com/rdf/rss-sp-all",
-    "https://feeds.bbci.co.uk/mundo/rss.xml",
-    "https://www.france24.com/es/rss",
-]
+SITE_URL = os.environ.get(
+    "MUNDO_AL_DIA_SITE_URL",
+    "https://mundo-al-dia-github-production.up.railway.app",
+).rstrip("/")
 
 def clean(value):
-    value = html.unescape(value or "")
-    value = re.sub(r"<[^>]+>", " ", value)
-    return re.sub(r"\s+", " ", value).strip()
-
-def tag_text(node, names):
-    for name in names:
-        found = node.find(name)
-        if found is not None and found.text:
-            return found.text.strip()
-    return ""
+    return re.sub(r"\\s+", " ", str(value or "")).strip()
 
 def main():
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    request = urllib.request.Request(
+        SITE_URL + "/api/articles",
+        headers={"User-Agent": "MundoAlDiaVideoBot/1.0", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        articles = json.loads(response.read().decode("utf-8"))
+
+    if not isinstance(articles, list):
+        raise SystemExit("La API del sitio no devolvió una lista de noticias.")
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=8)
     candidates = []
-    for feed_url in FEEDS:
-        try:
-            req = urllib.request.Request(feed_url, headers={"User-Agent": "MundoAlDiaVideoBot/1.0"})
-            with urllib.request.urlopen(req, timeout=15) as response:
-                data = response.read(3_000_000)
-            root = ET.fromstring(data)
-            for item in root.findall(".//item"):
-                title = clean(tag_text(item, ["title"]))
-                link = clean(tag_text(item, ["link"]))
-                description = clean(tag_text(item, ["description", "{http://purl.org/rss/1.0/modules/content/}encoded"]))
-                date_text = tag_text(item, ["pubDate", "{http://purl.org/dc/elements/1.1/}date"])
-                if not title or len(title) < 18 or not link.startswith("https://") or len(description) < 60:
-                    continue
-                try:
-                    date = parsedate_to_datetime(date_text) if date_text else datetime.now(timezone.utc)
-                    if date.tzinfo is None:
-                        date = date.replace(tzinfo=timezone.utc)
-                    date = date.astimezone(timezone.utc)
-                except Exception:
-                    date = datetime.now(timezone.utc)
-                if date < cutoff:
-                    continue
-                candidates.append((date, title, link, description))
-        except Exception as exc:
-            print(f"Feed no disponible {feed_url}: {exc}", file=sys.stderr)
-    candidates.sort(reverse=True, key=lambda item: item[0])
-    if not candidates:
-        raise SystemExit("No hay noticias recientes con texto suficiente; no se crea un vídeo.")
-    last_error = None
-    for date, title, link, description in candidates[:12]:
-        title = title[:175].strip()
-        summary = description[:1000].strip()
-        if len(summary) < 60:
+    for article in articles:
+        if not isinstance(article, dict):
             continue
-        narration = (
-            "Última hora. " + title + ". " + summary +
-            " Seguiremos atentos a las actualizaciones publicadas por la fuente original. "
-            "Consulta la información de origen para conocer nuevos detalles. Mundo al Día. El mundo, al día."
+        title = clean(article.get("title"))
+        slug = clean(article.get("slug"))
+        summary = clean(article.get("excerpt") or article.get("content"))
+        image_url = clean(article.get("image_url"))
+        created_at = article.get("created_at")
+        if not title or not slug or len(summary) < 60 or not image_url.startswith("https://"):
+            continue
+        try:
+            published = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+            if published.tzinfo is None:
+                published = published.replace(tzinfo=timezone.utc)
+            published = published.astimezone(timezone.utc)
+        except Exception:
+            continue
+        if published < cutoff or published > now + timedelta(minutes=5):
+            continue
+        candidates.append((published, article, title, summary))
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    if not candidates:
+        raise SystemExit(
+            "No hay una noticia publicada recientemente en Mundo al Día con foto HTTPS y texto suficiente. "
+            "No se consultarán otras páginas ni fuentes."
         )
-        narration = re.sub(r"\s+", " ", narration).strip()
-        if len(narration) > 2500:
-            narration = narration[:2490].rsplit(" ", 1)[0] + "."
-        print(f"Probando noticia: {title}", file=sys.stderr)
-        result = subprocess.run([
-            sys.executable, "scripts/create_video_draft.py",
-            "--title", title,
-            "--summary", summary,
-            "--narration", narration,
-            "--source-url", link,
-        ])
-        if result.returncode == 0:
-            print(f"BORRADOR_CREADO={title}", file=sys.stderr)
-            return
-        last_error = f"No se pudo generar vídeo con {link}"
-        print(f"Se prueba la siguiente noticia. {last_error}", file=sys.stderr)
-    raise SystemExit(last_error or "No se pudo crear un vídeo con imágenes de la fuente original.")
+
+    published, article, title, summary = candidates[0]
+    summary = summary[:1100].strip()
+    article_url = SITE_URL + "/noticia/" + article["slug"]
+    narration = (
+        "Última hora. " + title + ". " + summary +
+        " Esta es la información publicada por Mundo al Día. "
+        "Seguiremos atentos a las actualizaciones. Mundo al Día. El mundo, al día."
+    )
+    narration = re.sub(r"\\s+", " ", narration).strip()
+    if len(narration) > 2500:
+        narration = narration[:2490].rsplit(" ", 1)[0] + "."
+
+    print("NOTICIA_DEL_SITIO=" + title)
+    print("ARTICULO=" + article_url)
+    result = subprocess.run([
+        sys.executable, "scripts/create_video_draft.py",
+        "--title", title[:175],
+        "--summary", summary,
+        "--narration", narration,
+        "--source-url", article_url,
+    ])
+    if result.returncode:
+        raise SystemExit("No se pudo crear el vídeo con la noticia publicada en Mundo al Día.")
+
+    metadata_path = "video-draft-output/video-metadata.json"
+    with open(metadata_path, encoding="utf-8") as handle:
+        metadata = json.load(handle)
+    metadata["article_slug"] = article["slug"]
+    metadata["article_published_at"] = published.isoformat()
+    metadata["source_policy"] = "Solo artículos publicados en Mundo al Día; sin búsquedas externas."
+    with open(metadata_path, "w", encoding="utf-8") as handle:
+        json.dump(metadata, handle, ensure_ascii=False, indent=2)
+        handle.write("\\n")
 
 if __name__ == "__main__":
     main()
