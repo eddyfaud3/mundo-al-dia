@@ -14,7 +14,7 @@ SITE_URL = os.environ.get(
 ).rstrip("/")
 
 def clean(value):
-    return re.sub(r"\\s+", " ", str(value or "")).strip()
+    return re.sub(r"\s+", " ", str(value or "")).strip()
 
 def main():
     request = urllib.request.Request(
@@ -66,7 +66,7 @@ def main():
         " Esta es la información publicada por Mundo al Día. "
         "Seguiremos atentos a las actualizaciones. Mundo al Día. El mundo, al día."
     )
-    narration = re.sub(r"\\s+", " ", narration).strip()
+    narration = re.sub(r"\s+", " ", narration).strip()
     if len(narration) > 2500:
         narration = narration[:2490].rsplit(" ", 1)[0] + "."
 
@@ -90,7 +90,7 @@ def main():
     metadata["source_policy"] = "Solo artículos publicados en Mundo al Día; sin búsquedas externas."
     with open(metadata_path, "w", encoding="utf-8") as handle:
         json.dump(metadata, handle, ensure_ascii=False, indent=2)
-        handle.write("\\n")
+        handle.write("\n")
 
 if __name__ == "__main__":
     main()
