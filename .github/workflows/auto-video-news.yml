@@ -2,8 +2,8 @@ name: Crear vídeo automático de noticias — Mundo al Día
 
 on:
   schedule:
-    - cron: "35 13 * * *"
-    - cron: "35 22 * * *"
+    - cron: "17 14 * * *"
+    - cron: "17 23 * * *"
   workflow_dispatch:
     inputs:
       publish_video:
@@ -36,7 +36,9 @@ jobs:
           python -m pip install --upgrade pillow edge-tts CairoSVG
           python -c "import cairosvg; print('CairoSVG instalado:', cairosvg.__version__)"
 
-      - name: Buscar noticia reciente y crear vídeo automáticamente
+      - name: Leer la última noticia publicada en Mundo al Día y crear vídeo
+        env:
+          MUNDO_AL_DIA_SITE_URL: https://mundo-al-dia-github-production.up.railway.app
         run: python scripts/create_video_from_latest_news.py
 
       - name: Convertir MP4 para iPhone y Safari
