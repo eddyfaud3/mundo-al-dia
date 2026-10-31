@@ -1,0 +1,52 @@
+name: Prueba manual de vídeo — solo Mundo al Día
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mundo-al-dia-video-site-only-test
+  cancel-in-progress: false
+
+jobs:
+  create-video-draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade pillow edge-tts CairoSVG
+          python -c "import cairosvg; print('CairoSVG instalado:', cairosvg.__version__)"
+
+      - name: Leer únicamente Mundo al Día y crear borrador
+        env:
+          MUNDO_AL_DIA_SITE_URL: https://mundo-al-dia-github-production.up.railway.app
+        run: python scripts/create_video_from_latest_news.py
+
+      - name: Verificar MP4 y audio
+        run: |
+          set -euo pipefail
+          video="video-draft-output/mundo-al-dia-video-original.mp4"
+          test -s "$video"
+          ffprobe -v error -show_entries stream=codec_type,codec_name,width,height -of json "$video"
+          test -s video-draft-output/narracion_es.mp3
+          test -s video-draft-output/video-metadata.json
+          test -s video-draft-output/FUENTE_Y_LICENCIA_FOTO.txt
+          echo "Borrador generado. No se publicó en el sitio, Facebook ni Instagram."
+
+      - name: Guardar borrador como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: mundo-al-dia-video-site-only-test
+          path: video-draft-output/
+          if-no-files-found: error
+          retention-days: 7
