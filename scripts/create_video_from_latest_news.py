@@ -61,8 +61,9 @@ def fetch_site_articles():
 def main():
     articles = fetch_site_articles()
     now = datetime.now(timezone.utc)
-    # Only use very recent stories; if none qualify, stop instead of recycling old news.
-    cutoff = now - timedelta(hours=6)
+    # Prefer recent stories, but allow the latest published Mundo al Día article from the last 24 hours.
+    # Never recycle older news or consult external sources.
+    cutoff = now - timedelta(hours=24)
     candidates = []
 
     for article in articles:
