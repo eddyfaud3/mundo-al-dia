@@ -377,7 +377,7 @@ def main():
     # Create three scenes reusing the single source-article image, plus the branded end card.
     # If the article has only one usable image, make one editorial scene instead of forcing three images.
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", narration) if s.strip()]
-    scene_count = 5  # Cinco bloques para una narración más completa; se reutiliza la misma foto
+    scene_count = 8  # Ocho bloques para una narración más completa; se reutiliza la misma foto
     groups = [[] for _ in range(scene_count)]
     if len(sentences) < scene_count:
         words = narration.split()
@@ -418,7 +418,7 @@ def main():
     draw_scene(end_card_path, title, "El mundo, al día.", len(scene_paths)+1,
                len(scene_paths)+1, end_card=True)
     scene_paths.append(end_card_path)
-    # Render each still as a gently animated clip (slow Ken Burns zoom), then join clips to narration.
+    # Mantener cada escena estable: sin zoom ni movimiento que agrande el texto.
     concat = OUT / "escenas_animadas.txt"
     animated_clips = []
     clip_durations = durations + [2.0]
@@ -428,7 +428,7 @@ def main():
         run([
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-loop", "1", "-i", str(p),
-            "-vf", "zoompan=z='min(1.0+0.00025*on,1.025)':x='iw/2-(iw/zoom/2)+2*sin(on/45)':y='ih/2-(ih/zoom/2)+2*cos(on/50)':d=1:s=1080x1920:fps=30,format=yuv420p",
+            "-vf", "fps=30,format=yuv420p",
             "-frames:v", str(frames), "-an",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
             "-pix_fmt", "yuv420p", str(clip)
