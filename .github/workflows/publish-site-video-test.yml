@@ -1,0 +1,142 @@
+name: Publicar un vídeo de prueba — Mundo al Día
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_publication:
+        description: "Confirmo que este vídeo real se publicará públicamente en Facebook e Instagram."
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mundo-al-dia-publicacion-prueba
+  cancel-in-progress: false
+
+jobs:
+  publish-one-test-video:
+    if: ${{ inputs.confirm_publication == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Descargar el código probado
+        uses: actions/checkout@v4
+        with:
+          ref: fix/site-only-video-reliability
+
+      - name: Instalar dependencias
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade pillow edge-tts CairoSVG
+
+      - name: Crear vídeo usando únicamente Mundo al Día
+        env:
+          MUNDO_AL_DIA_SITE_URL: https://mundo-al-dia-github-production.up.railway.app
+        run: python scripts/create_video_from_latest_news.py
+
+      - name: Preparar MP4 compatible y verificar metadatos
+        run: |
+          set -euo pipefail
+          input="video-draft-output/mundo-al-dia-video-original.mp4"
+          output="video-draft-output/mundo-al-dia-video-compatible.mp4"
+          test -s "$input"
+          ffmpeg -y -i "$input" -c:v libx264 -profile:v baseline -level 4.0 -pix_fmt yuv420p -r 30 -crf 23 -preset medium -c:a aac -b:a 128k -ar 44100 -ac 2 -movflags +faststart "$output"
+          mv "$output" "$input"
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          p=Path("video-draft-output/mundo-al-dia-video-original.mp4")
+          m=Path("video-draft-output/video-metadata.json")
+          assert p.is_file() and p.stat().st_size > 10000, "No existe un MP4 válido."
+          assert m.is_file(), "Faltan los metadatos."
+          d=json.loads(m.read_text(encoding="utf-8"))
+          for k in ("title","source_url"):
+              assert isinstance(d.get(k),str) and d[k].strip(), f"Falta {k}."
+          assert d.get("primary_article_image"), "No se confirmó la foto única del artículo."
+          x=json.loads(subprocess.check_output(["ffprobe","-v","error","-show_streams","-of","json",str(p)],text=True))
+          v=[s for s in x["streams"] if s.get("codec_type")=="video"]
+          a=[s for s in x["streams"] if s.get("codec_type")=="audio"]
+          assert v and a and (v[0].get("width"),v[0].get("height"))==(1080,1920), "Formato de vídeo incorrecto."
+          assert v[0].get("codec_name")=="h264" and a[0].get("codec_name")=="aac", "Códecs incompatibles."
+          print("Vídeo y metadatos verificados.")
+          PY
+
+      - name: Subir MP4 a Cloudinary
+        env:
+          CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDINARY_URL:-}" || { echo "::error::Falta el secreto CLOUDINARY_URL."; exit 1; }
+          npm install --no-save cloudinary
+          node --input-type=module <<'NODE'
+          import { v2 as cloudinary } from "cloudinary";
+          import { writeFile } from "node:fs/promises";
+          const uploaded = await cloudinary.uploader.upload(
+            "video-draft-output/mundo-al-dia-video-original.mp4",
+            { resource_type: "video", folder: "mundo-al-dia/videos",
+              public_id: `video-prueba-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`,
+              overwrite: false }
+          );
+          if (!uploaded.secure_url?.startsWith("https://")) throw new Error("Cloudinary no devolvió una URL HTTPS.");
+          await writeFile("video-draft-output/public-video-url.txt", uploaded.secure_url + "\n");
+          console.log("MP4 almacenado en Cloudinary.");
+          NODE
+
+      - name: Publicar una sola vez en el sitio, Facebook e Instagram
+        env:
+          AUTOMATION_SECRET: ${{ secrets.MUNDO_AL_DIA_AUTOMATION_SECRET }}
+          SITE_URL: https://mundo-al-dia-github-production.up.railway.app
+          RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          test -n "${AUTOMATION_SECRET:-}" || { echo "::error::Falta el secreto MUNDO_AL_DIA_AUTOMATION_SECRET."; exit 1; }
+          export VIDEO_URL="$(cat video-draft-output/public-video-url.txt)"
+          python - <<'PY'
+          import json, os, urllib.request, urllib.error
+          with open("video-draft-output/video-metadata.json",encoding="utf-8") as f:
+              m=json.load(f)
+          payload={
+              "video_url":os.environ["VIDEO_URL"],
+              "title":m["title"],
+              "caption":(m.get("caption") or m.get("summary") or m["title"])[:1200],
+              "source_url":m["source_url"],
+              "run_id":os.environ["RUN_ID"].replace("-","_")
+          }
+          req=urllib.request.Request(
+              os.environ["SITE_URL"].rstrip("/")+"/api/automation/publish-video",
+              data=json.dumps(payload,ensure_ascii=False).encode("utf-8"),
+              headers={"Authorization":"Bearer "+os.environ["AUTOMATION_SECRET"],
+                       "Content-Type":"application/json"},
+              method="POST")
+          try:
+              with urllib.request.urlopen(req,timeout=180) as response:
+                  result=json.loads(response.read().decode("utf-8"))
+          except urllib.error.HTTPError as e:
+              print(e.read().decode("utf-8","replace"))
+              raise
+          print(json.dumps(result,ensure_ascii=False,indent=2))
+          if result.get("dry_run"):
+              raise SystemExit("El interruptor VIDEO_AUTO_PUBLISH_ENABLED está apagado: no se publicó nada.")
+          if not result.get("site_published"):
+              raise SystemExit("El sitio no confirmó la publicación.")
+          if not result.get("facebook",{}).get("published"):
+              raise SystemExit("Facebook no confirmó la publicación. Revisa el resultado antes de volver a ejecutar.")
+          if not result.get("instagram",{}).get("published"):
+              raise SystemExit("Instagram no confirmó la publicación. Revisa el resultado antes de volver a ejecutar.")
+          print("CONFIRMADO: vídeo publicado en el sitio, Facebook e Instagram.")
+          PY
+
+      - name: Guardar vídeo y comprobantes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mundo-al-dia-video-prueba-publicacion
+          path: video-draft-output/
+          if-no-files-found: warn
+          retention-days: 7
