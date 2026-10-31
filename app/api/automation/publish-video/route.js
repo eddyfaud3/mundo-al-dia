@@ -78,7 +78,8 @@ export async function POST(request) {
       return NextResponse.json({ error: "Esta ejecución ya fue procesada; se evita duplicar la publicación." }, { status: 409 });
     }
 
-    const content = [caption, "", sourceUrl ? "Fuente original: " + sourceUrl : "", "", "Vídeo original de Mundo al Día."].filter(Boolean).join("\n");
+    // El enlace de la fuente se conserva solo para uso interno; nunca se muestra en la publicación.
+    const content = caption;
     const inserted = await db.query(
       `INSERT INTO articles (title,slug,excerpt,content,image_url,video_url,category,published)
        VALUES ($1,$2,$3,$4,$5,$6,$7,true) RETURNING *`,
