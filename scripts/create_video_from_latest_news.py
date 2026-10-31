@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Create a video using only the latest published Mundo al Día article."""
 import json
+import html
 import os
 import re
 import subprocess
