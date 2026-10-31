@@ -260,7 +260,7 @@ def split_narration(text, parts=3):
 
 def draw_visual(im, d, body, index):
     """Use a wide, restrained photo frame so the story text has room below."""
-    x0, y0, x1, y1 = 72, 570, 1008, 1040
+    x0, y0, x1, y1 = 132, 600, 948, 1010
     if not PHOTO_PATHS:
         raise RuntimeError("No hay fotos con licencia revisable; no se genera un vídeo con imágenes ficticias.")
     photo_path = PHOTO_PATHS[min(max(index - 1, 0), len(PHOTO_PATHS) - 1)]
@@ -313,20 +313,20 @@ def draw_scene(path, title, body, index, total, end_card=False):
         y += 80
     if not end_card:
         draw_visual(im, d, body, index)
-        y = 1110
-        max_width = 920
-        available_height = 570
+        y = 1065
+        max_width = 840
+        available_height = 600
     else:
         y = 430
         max_width = 920
         available_height = 760
     # Reduce font size as needed; never silently cut the end of a sentence.
-    body_font = font(34)
+    body_font = font(28)
     body_lines = wrap_by_pixels(d, body, body_font, max_width)
-    while len(body_lines) * 45 > available_height and body_font.size > 24:
+    while len(body_lines) * 40 > available_height and body_font.size > 22:
         body_font = font(body_font.size - 2)
         body_lines = wrap_by_pixels(d, body, body_font, max_width)
-    line_h = body_font.size + 12
+    line_h = body_font.size + 10
     if len(body_lines) * line_h > available_height:
         raise RuntimeError(f"El texto de la escena {index} no cabe completo; acorta el texto en lugar de cortarlo.")
     for line in body_lines:
@@ -357,7 +357,7 @@ def main():
         raise SystemExit("El titular debe tener entre 1 y 180 caracteres.")
     if len(summary) < 60 or len(summary) > 1200:
         raise SystemExit("El resumen debe tener entre 60 y 1200 caracteres.")
-    if len(narration) < 100 or len(narration) > 2600:
+    if len(narration) < 100 or len(narration) > 4500:
         raise SystemExit("La narración debe tener entre 100 y 2600 caracteres.")
     OUT.mkdir(parents=True, exist_ok=True)
     # Renderizar el logo SVG oficial para integrarlo nítidamente en el vídeo.
@@ -377,7 +377,7 @@ def main():
     # Create three scenes reusing the single source-article image, plus the branded end card.
     # If the article has only one usable image, make one editorial scene instead of forcing three images.
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", narration) if s.strip()]
-    scene_count = 3  # Reutilizar la única foto del artículo en las tres escenas
+    scene_count = 5  # Cinco bloques para una narración más completa; se reutiliza la misma foto
     groups = [[] for _ in range(scene_count)]
     if len(sentences) < scene_count:
         words = narration.split()
@@ -428,7 +428,7 @@ def main():
         run([
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-loop", "1", "-i", str(p),
-            "-vf", "zoompan=z='min(1.0+0.0011*on,1.08)':x='iw/2-(iw/zoom/2)+12*sin(on/35)':y='ih/2-(ih/zoom/2)+10*cos(on/42)':d=1:s=1080x1920:fps=30,format=yuv420p",
+            "-vf", "zoompan=z='min(1.0+0.00025*on,1.025)':x='iw/2-(iw/zoom/2)+2*sin(on/45)':y='ih/2-(ih/zoom/2)+2*cos(on/50)':d=1:s=1080x1920:fps=30,format=yuv420p",
             "-frames:v", str(frames), "-an",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
             "-pix_fmt", "yuv420p", str(clip)
