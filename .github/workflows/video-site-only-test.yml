@@ -15,8 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Descargar el código
+      - name: Descargar el código de la rama de pruebas
         uses: actions/checkout@v4
+        with:
+          ref: fix/site-only-video-reliability
 
       - name: Instalar dependencias
         run: |
