@@ -329,15 +329,15 @@ def main():
                      output_width=900, output_height=330)
     global PHOTO_PATHS, PHOTO_CREDITS
     # Use only images found on the exact article page. Never silently substitute unrelated stock/context images.
-    PHOTO_CREDITS = download_article_images(OUT, args.source_url, max_images=6)
+    PHOTO_CREDITS = download_article_images(OUT, args.source_url, max_images=1)
     PHOTO_PATHS = [item["path"] for item in PHOTO_CREDITS]
     save_photo_credits(OUT, PHOTO_CREDITS)
     voice = os.environ.get("MUNDO_AL_DIA_TTS_VOICE", "es-MX-JorgeNeural")
     rate = os.environ.get("MUNDO_AL_DIA_TTS_RATE", "-8%")
-    # Create one scene per available source-article image (up to six), plus the branded end card.
+    # Create three scenes reusing the single source-article image, plus the branded end card.
     # If the article has only one usable image, make one editorial scene instead of forcing three images.
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", narration) if s.strip()]
-    scene_count = max(1, len(PHOTO_PATHS))
+    scene_count = 3  # Reutilizar la única foto del artículo en las tres escenas
     groups = [[] for _ in range(scene_count)]
     if len(sentences) < scene_count:
         words = narration.split()
@@ -418,7 +418,7 @@ def main():
         "Borrador original de Mundo al Día.\n"
         f"Voz neural usada: {voice}; velocidad: {rate}; tono: -2 Hz.\n"
         f"Artículo original: {args.source_url}\n"
-        "Las imágenes provienen de la página del artículo; sus derechos NO están verificados automáticamente.\n"
+        "La única imagen proviene de la página del artículo y se reutiliza en las escenas; sus derechos NO están verificados automáticamente.\n"
         "Revisar FUENTE_Y_LICENCIA_FOTO.txt y confirmar pertinencia visual y permisos antes de publicar.\n"
         "Este archivo NO se publicó en el sitio, Facebook ni Instagram.\n"
         "Revisión editorial humana requerida antes de cualquier publicación.\n",
