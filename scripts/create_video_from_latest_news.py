@@ -60,8 +60,8 @@ def fetch_site_articles():
 def main():
     articles = fetch_site_articles()
     now = datetime.now(timezone.utc)
-    # A 12-hour window tolerates a delayed site run without recycling an old story.
-    cutoff = now - timedelta(hours=12)
+    # Only use very recent stories; if none qualify, stop instead of recycling old news.
+    cutoff = now - timedelta(hours=6)
     candidates = []
 
     for article in articles:
