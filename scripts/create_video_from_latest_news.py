@@ -114,6 +114,7 @@ def main():
         "--summary", summary,
         "--narration", narration,
         "--source-url", article_url,
+        "--image-url", image_url,
     ])
     if result.returncode:
         raise SystemExit("No se pudo crear el vídeo con la noticia publicada en Mundo al Día.")
