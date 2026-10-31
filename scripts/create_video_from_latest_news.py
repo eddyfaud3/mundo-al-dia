@@ -69,7 +69,7 @@ def main():
             continue
         title = clean(article.get("title"))
         slug = clean(article.get("slug"))
-        summary = clean(article.get("excerpt") or article.get("content"))
+        summary = clean(article.get("content") or article.get("excerpt"))
         image_url = clean(article.get("image_url"))
         created_at = article.get("created_at")
         if not title or not slug or len(summary) < 60 or not image_url.startswith("https://"):
@@ -93,7 +93,7 @@ def main():
         )
 
     published, article, title, summary = candidates[0]
-    summary = summary[:1100].strip()
+    summary = summary[:1900].strip()
     article_url = SITE_URL + "/noticia/" + urllib.parse.quote(article["slug"], safe="")
     narration = (
         "Última hora. " + title + ". " + summary +
@@ -101,8 +101,8 @@ def main():
         "Seguiremos atentos a las actualizaciones. Mundo al Día. El mundo, al día."
     )
     narration = re.sub(r"\s+", " ", narration).strip()
-    if len(narration) > 2500:
-        narration = narration[:2490].rsplit(" ", 1)[0] + "."
+    if len(narration) > 4300:
+        narration = narration[:4290].rsplit(" ", 1)[0] + "."
 
     print("NOTICIA_DEL_SITIO=" + title)
     print("ARTICULO=" + article_url)
