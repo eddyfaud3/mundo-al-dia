@@ -104,11 +104,8 @@ def main():
             full_summary = full_summary[:last_sentence + 1].strip()
         else:
             full_summary = full_summary.rsplit(" ", 1)[0].rstrip(" ,;:") + "."
-    caption_summary = summary[:1100].strip()
-    if len(summary) > 1100:
-        last_sentence = max(caption_summary.rfind(". "), caption_summary.rfind("! "), caption_summary.rfind("? "))
-        if last_sentence >= 300:
-            caption_summary = caption_summary[:last_sentence + 1].strip()
+    # Publicación social: solo hashtags, sin enlaces ni créditos de fuentes externas.
+    caption_summary = "#MundoAlDia #UltimaHora #Noticias #NoticiasInternacionales #Actualidad"
     article_url = SITE_URL + "/noticia/" + urllib.parse.quote(article["slug"], safe="")
     narration = (
         "Última hora. " + title + ". " + full_summary +
