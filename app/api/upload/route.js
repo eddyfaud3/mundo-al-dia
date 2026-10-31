@@ -1,4 +1,4 @@
-import { v2 as cloudinary } from "cloudinary";
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { cookieName, validToken } from "../../../lib/auth";
@@ -57,20 +57,12 @@ export async function POST() {
     }
 
     const config = getCloudinaryConfig();
-
-    cloudinary.config({
-      cloud_name: config.cloudName,
-      api_key: config.apiKey,
-      api_secret: config.apiSecret,
-    });
-
     const timestamp = Math.round(Date.now() / 1000);
     const folder = "mundo-al-dia";
 
-    const signature = cloudinary.utils.api_sign_request(
-      { timestamp, folder },
-      config.apiSecret
-    );
+    // Cloudinary signature: alphabetically sorted parameters + API secret, SHA-1.
+    const signaturePayload = `folder=${folder}&timestamp=${timestamp}${config.apiSecret}`;
+    const signature = createHash("sha1").update(signaturePayload).digest("hex");
 
     return NextResponse.json({
       timestamp,
