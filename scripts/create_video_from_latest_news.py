@@ -19,7 +19,7 @@ MAX_ATTEMPTS = 3
 
 
 def clean(value):
-    return re.sub(r"\\s+", " ", str(value or "")).strip()
+    return re.sub(r"\s+, " ", str(value or "")).strip()
 
 
 def fetch_site_articles():
@@ -100,7 +100,7 @@ def main():
         " Esta es la información publicada por Mundo al Día. "
         "Seguiremos atentos a las actualizaciones. Mundo al Día. El mundo, al día."
     )
-    narration = re.sub(r"\\s+", " ", narration).strip()
+    narration = re.sub(r"\s+, " ", narration).strip()
     if len(narration) > 2500:
         narration = narration[:2490].rsplit(" ", 1)[0] + "."
 
@@ -127,7 +127,7 @@ def main():
     metadata["primary_article_image"] = image_url
     with open(metadata_path, "w", encoding="utf-8") as handle:
         json.dump(metadata, handle, ensure_ascii=False, indent=2)
-        handle.write("\\n")
+        handle.write("\n")
 
 
 if __name__ == "__main__":
