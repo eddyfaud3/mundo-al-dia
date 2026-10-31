@@ -71,6 +71,8 @@ def main():
         title = clean(article.get("title"))
         slug = clean(article.get("slug"))
         summary = clean(article.get("content") or article.get("excerpt"))
+        summary = html.unescape(re.sub(r"<[^>]+>", " ", summary))
+        summary = clean(summary)
         image_url = clean(article.get("image_url"))
         created_at = article.get("created_at")
         if not title or not slug or len(summary) < 60 or not image_url.startswith("https://"):
@@ -94,10 +96,22 @@ def main():
         )
 
     published, article, title, summary = candidates[0]
-    summary = summary[:1900].strip()
+    # Usar el contenido del artículo para una narración más completa, sin cortar frases.
+    full_summary = summary[:3900].strip()
+    if len(summary) > 3900:
+        last_sentence = max(full_summary.rfind(". "), full_summary.rfind("! "), full_summary.rfind("? "))
+        if last_sentence >= 1800:
+            full_summary = full_summary[:last_sentence + 1].strip()
+        else:
+            full_summary = full_summary.rsplit(" ", 1)[0].rstrip(" ,;:") + "."
+    caption_summary = summary[:1100].strip()
+    if len(summary) > 1100:
+        last_sentence = max(caption_summary.rfind(". "), caption_summary.rfind("! "), caption_summary.rfind("? "))
+        if last_sentence >= 300:
+            caption_summary = caption_summary[:last_sentence + 1].strip()
     article_url = SITE_URL + "/noticia/" + urllib.parse.quote(article["slug"], safe="")
     narration = (
-        "Última hora. " + title + ". " + summary +
+        "Última hora. " + title + ". " + full_summary +
         " Esta es la información publicada por Mundo al Día. "
         "Seguiremos atentos a las actualizaciones. Mundo al Día. El mundo, al día."
     )
@@ -112,7 +126,7 @@ def main():
     result = subprocess.run([
         sys.executable, "scripts/create_video_draft.py",
         "--title", title[:175],
-        "--summary", summary,
+        "--summary", caption_summary,
         "--narration", narration,
         "--source-url", article_url,
         "--image-url", image_url,
