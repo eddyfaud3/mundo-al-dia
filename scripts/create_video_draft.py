@@ -152,6 +152,45 @@ def download_article_images(out_dir, article_url, max_images=6):
         )
     return credits
 
+
+def download_primary_article_image(out_dir, image_url, article_url):
+    """Download exactly the image_url stored on the published Mundo al Día article."""
+    parsed = urllib.parse.urlparse(image_url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise RuntimeError("La foto principal del artículo debe ser una URL HTTPS válida.")
+    req = urllib.request.Request(image_url, headers={
+        "User-Agent": "Mozilla/5.0 (compatible; MundoAlDiaDraftGenerator/1.0)",
+        "Referer": article_url,
+    })
+    with urllib.request.urlopen(req, timeout=30) as response:
+        mime = (response.headers.get("Content-Type") or "").lower()
+        raw = response.read(15_000_000)
+    if not mime.startswith("image/"):
+        raise RuntimeError("La URL image_url de Mundo al Día no devolvió una imagen.")
+    suffix = ".jpg"
+    if "png" in mime: suffix = ".png"
+    elif "webp" in mime: suffix = ".webp"
+    elif "gif" in mime: suffix = ".gif"
+    path = out_dir / ("foto_principal_articulo" + suffix)
+    path.write_bytes(raw)
+    try:
+        with Image.open(path) as image:
+            image.verify()
+        with Image.open(path) as image:
+            width, height = image.size
+        if width < 300 or height < 180:
+            raise RuntimeError("La foto principal del artículo es demasiado pequeña.")
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return [{
+        "path": path, "file": image_url, "source": image_url,
+        "article": article_url,
+        "license": "No verificada automáticamente; requiere autorización/licencia antes de publicar",
+        "credit": "Consultar crédito indicado en Mundo al Día",
+        "search": "Foto principal exacta guardada en el artículo de Mundo al Día",
+    }]
+
 def save_photo_credits(out_dir, credits):
     lines = [
         "IMÁGENES DEL ARTÍCULO ORIGINAL — borrador no publicado.",
@@ -308,7 +347,8 @@ def main():
     ap.add_argument("--title", required=True)
     ap.add_argument("--summary", required=True)
     ap.add_argument("--narration", required=True)
-    ap.add_argument("--source-url", required=True, help="URL HTTPS del artículo original que contiene las imágenes")
+    ap.add_argument("--source-url", required=True, help="URL HTTPS del artículo original")
+    ap.add_argument("--image-url", required=True, help="URL HTTPS de la foto principal guardada en el artículo de Mundo al Día")
     args = ap.parse_args()
     title = args.title.strip()
     summary = args.summary.strip()
@@ -329,7 +369,7 @@ def main():
                      output_width=900, output_height=330)
     global PHOTO_PATHS, PHOTO_CREDITS
     # Use only images found on the exact article page. Never silently substitute unrelated stock/context images.
-    PHOTO_CREDITS = download_article_images(OUT, args.source_url, max_images=1)
+    PHOTO_CREDITS = download_primary_article_image(OUT, args.image_url, args.source_url)
     PHOTO_PATHS = [item["path"] for item in PHOTO_CREDITS]
     save_photo_credits(OUT, PHOTO_CREDITS)
     voice = os.environ.get("MUNDO_AL_DIA_TTS_VOICE", "es-MX-JorgeNeural")
@@ -411,6 +451,8 @@ def main():
             "title": title,
             "caption": args.summary.strip(),
             "source_url": args.source_url,
+            "primary_article_image": args.image_url,
+            "image_policy": "Una única foto principal del artículo, reutilizada en todas las escenas.",
         }, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8"
     )
