@@ -333,9 +333,38 @@ def draw_scene(path, title, body, index, total, end_card=False):
         d.text((80, y), line, font=body_font, fill=WHITE)
         y += line_h
     if end_card:
-        d.rounded_rectangle((72, 1450, 1008, 1650), radius=30, fill=(5, 17, 37), outline=CYAN, width=3)
-        d.text((110, 1492), "EL MUNDO, AL DÍA.", font=font(48, True), fill=WHITE)
-        d.text((110, 1570), "Sigue la página para más información", font=font(27), fill=MUTED)
+        d.rounded_rectangle((72, 1390, 1008, 1585), radius=30, fill=(5, 17, 37), outline=CYAN, width=3)
+        d.text((110, 1420), "EL MUNDO, AL DÍA.", font=font(45, True), fill=WHITE)
+        d.text((110, 1490), "Sigue la página para más información", font=font(25), fill=MUTED)
+
+        # Pequeña franja fija de interacción al pie de cada vídeo.
+        cta_y = 1665
+        cta_items = [
+            (235, "ME GUSTA", (25, 112, 220), "like"),
+            (540, "COMPARTE", (25, 112, 220), "share"),
+            (845, "SUSCRÍBETE", (210, 35, 42), "bell"),
+        ]
+        for cx, label, color, symbol in cta_items:
+            d.ellipse((cx - 48, cta_y - 48, cx + 48, cta_y + 48), fill=color, outline=WHITE, width=3)
+            if symbol == "like":
+                # Icono sencillo de pulgar arriba.
+                d.rounded_rectangle((cx - 12, cta_y - 5, cx + 22, cta_y + 27), radius=6, fill=WHITE)
+                d.polygon([(cx - 12, cta_y + 2), (cx - 2, cta_y - 27),
+                           (cx + 8, cta_y - 31), (cx + 12, cta_y - 7),
+                           (cx + 27, cta_y - 7), (cx + 31, cta_y + 1),
+                           (cx + 23, cta_y + 27), (cx - 12, cta_y + 27)], fill=WHITE)
+            elif symbol == "share":
+                d.line((cx - 22, cta_y + 13, cx + 17, cta_y - 15), fill=WHITE, width=9)
+                d.polygon([(cx + 28, cta_y - 23), (cx + 21, cta_y + 3),
+                           (cx + 9, cta_y - 8)], fill=WHITE)
+            else:
+                d.arc((cx - 22, cta_y - 25, cx + 22, cta_y + 20), 180, 360, fill=WHITE, width=7)
+                d.line((cx - 22, cta_y - 2, cx - 22, cta_y + 18, cx + 22, cta_y + 18,
+                        cx + 22, cta_y - 2), fill=WHITE, width=7)
+                d.ellipse((cx - 5, cta_y + 21, cx + 5, cta_y + 31), fill=WHITE)
+            label_font = font(22, True)
+            bbox = d.textbbox((0, 0), label, font=label_font)
+            d.text((cx - (bbox[2] - bbox[0]) / 2, cta_y + 62), label, font=label_font, fill=WHITE)
     else:
         d.text((72, 1740), "INFORMACIÓN EN ESPAÑOL · MUNDO AL DÍA", font=font(24, True), fill=MUTED)
         d.text((930, 1815), f"{index:02d}/{total:02d}", font=font(25, True), fill=CYAN)
