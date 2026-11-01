@@ -114,7 +114,7 @@ def main():
     if len(full_summary) < 60:
         raise SystemExit("La noticia no contiene suficiente información limpia para narrarla.")
 
-    # Objetivo: 45–60 segundos. Se limita el resumen a unas 125 palabras.
+    # Objetivo: 45–60 segundos. Se limita el resumen a unas 105 palabras.
     words = full_summary.split()
     if len(words) > 105:
         shortened = " ".join(words[:105])
