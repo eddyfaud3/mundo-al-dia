@@ -93,7 +93,7 @@ jobs:
           assert vs[0].get("codec_name") == "h264" and vs[0].get("pix_fmt") == "yuv420p", "Códec de vídeo incompatible."
           assert aus[0].get("codec_name") == "aac", "Códec de audio incompatible."
           print("MP4 verificado:", round(float(info["format"]["duration"]), 1), "segundos.")
-          print("Modo borrador: no se carga a Cloudinary ni se publica en Facebook o Instagram.")
+          print("MP4 verificado y listo para publicación.")
           PY
 
       - name: Subir MP4 a Cloudinary
@@ -114,7 +114,7 @@ jobs:
               overwrite: false }
           );
           if (!uploaded.secure_url?.startsWith("https://")) throw new Error("Cloudinary no devolvió una URL HTTPS.");
-          await writeFile("video-draft-output/public-video-url.txt", uploaded.secure_url + "\\n");
+          await writeFile("video-draft-output/public-video-url.txt", uploaded.secure_url + "\n");
           console.log("Vídeo almacenado en Cloudinary.");
           NODE
 
