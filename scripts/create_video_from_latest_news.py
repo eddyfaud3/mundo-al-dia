@@ -97,9 +97,25 @@ def main():
         )
 
     published, article, title, summary = candidates[0]
-    # Usar el contenido del artículo para una narración más completa, sin cortar frases.
-    full_summary = summary[:3900].strip()
-    if len(summary) > 3900:
+    # Limpiar créditos/editoriales heredados del texto importado antes de enviarlo al narrador.
+    def narration_text(value):
+        value = html.unescape(re.sub(r"<[^>]+>", " ", str(value or "")))
+        value = re.sub(r"https?://\\S+", " ", value, flags=re.IGNORECASE)
+        value = re.sub(
+            r"(?i)(?:esta noticia se prepar[oó] a partir de|esta informaci[oó]n fue publicada por|"
+            r"cobertura publicada por|consulta la fuente original|para verificar actualizaciones|"
+            r"fuente\\s*:\\s*).*(?=$|[.!?])",
+            " ", value
+        )
+        value = re.sub(r"(?i)\\b(?:fuente|fuentes)\\s*:\\s*[^.!?]*(?:[.!?]|$)", " ", value)
+        value = re.sub(r"\\s+", " ", value).strip(" .;:-")
+        return value
+
+    full_summary = narration_text(summary)
+    if len(full_summary) < 60:
+        raise SystemExit("La noticia no contiene suficiente información limpia para narrarla.")
+    full_summary = full_summary[:3900].strip()
+    if len(full_summary) > 3900:
         last_sentence = max(full_summary.rfind(". "), full_summary.rfind("! "), full_summary.rfind("? "))
         if last_sentence >= 1800:
             full_summary = full_summary[:last_sentence + 1].strip()
