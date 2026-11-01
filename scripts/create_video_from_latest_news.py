@@ -100,15 +100,15 @@ def main():
     # Limpiar créditos/editoriales heredados del texto importado antes de enviarlo al narrador.
     def narration_text(value):
         value = html.unescape(re.sub(r"<[^>]+>", " ", str(value or "")))
-        value = re.sub(r"https?://\\S+", " ", value, flags=re.IGNORECASE)
+        value = re.sub(r"https?://\S+", " ", value, flags=re.IGNORECASE)
         value = re.sub(
             r"(?i)(?:esta noticia se prepar[oó] a partir de|esta informaci[oó]n fue publicada por|"
             r"cobertura publicada por|consulta la fuente original|para verificar actualizaciones|"
-            r"fuente\\s*:\\s*).*(?=$|[.!?])",
+            r"fuente\s*:\s*).*(?=$|[.!?])",
             " ", value
         )
-        value = re.sub(r"(?i)\\b(?:fuente|fuentes)\\s*:\\s*[^.!?]*(?:[.!?]|$)", " ", value)
-        value = re.sub(r"\\s+", " ", value).strip(" .;:-")
+        value = re.sub(r"(?i)\b(?:fuente|fuentes)\s*:\s*[^.!?]*(?:[.!?]|$)", " ", value)
+        value = re.sub(r"\s+", " ", value).strip(" .;:-")
         return value
 
     full_summary = narration_text(summary)
