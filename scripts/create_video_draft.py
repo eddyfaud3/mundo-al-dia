@@ -10,6 +10,7 @@ import subprocess
 import textwrap
 import json
 import hashlib
+import time
 from html.parser import HTMLParser
 import urllib.parse
 import urllib.request
@@ -213,6 +214,35 @@ def save_photo_credits(out_dir, credits):
 
 def run(args):
     subprocess.run(args, check=True)
+
+
+def create_tts_audio(text, output_path, voice, rate):
+    """Retry transient Edge TTS failures and try a second Spanish neural voice."""
+    voices = [voice]
+    fallback = "es-ES-AlvaroNeural" if voice != "es-ES-AlvaroNeural" else "es-MX-JorgeNeural"
+    voices.append(fallback)
+    last_error = None
+    for voice_name in voices:
+        for attempt in range(1, 4):
+            output_path.unlink(missing_ok=True)
+            try:
+                subprocess.run([
+                    "edge-tts", "--voice", voice_name, f"--rate={rate}",
+                    "--pitch=-2Hz", "--text", text, "--write-media", str(output_path)
+                ], check=True, timeout=90)
+                if output_path.exists() and output_path.stat().st_size > 1000:
+                    print(f"AUDIO_OK={output_path.name}; VOZ={voice_name}; INTENTO={attempt}")
+                    return voice_name
+                raise RuntimeError("Edge TTS no creó un archivo de audio válido.")
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
+                last_error = error
+                print(
+                    f"Advertencia: TTS falló con {voice_name}, intento {attempt}/3: {error}",
+                    flush=True
+                )
+                if attempt < 3:
+                    time.sleep(4 * attempt)
+    raise RuntimeError(f"No se pudo generar audio después de varios intentos y dos voces: {last_error}")
 
 
 def font(size, bold=False):
@@ -423,8 +453,7 @@ def main():
     durations = []
     for i, chunk in enumerate(narration_chunks, 1):
         part = OUT / f"voz_{i:02d}.mp3"
-        run(["edge-tts", "--voice", voice, f"--rate={rate}", "--pitch=-2Hz",
-             "--text", chunk, "--write-media", str(part)])
+        voice = create_tts_audio(chunk, part, voice, rate)
         duration = float(subprocess.check_output([
             "ffprobe", "-v", "error", "-show_entries", "format=duration",
             "-of", "default=noprint_wrappers=1:nokey=1", str(part)
