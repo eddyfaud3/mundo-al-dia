@@ -116,8 +116,8 @@ def main():
 
     # Objetivo: 45–60 segundos. Se limita el resumen a unas 125 palabras.
     words = full_summary.split()
-    if len(words) > 125:
-        shortened = " ".join(words[:125])
+    if len(words) > 105:
+        shortened = " ".join(words[:105])
         last_stop = max(shortened.rfind(". "), shortened.rfind("! "), shortened.rfind("? "))
         if last_stop >= 420:
             shortened = shortened[:last_stop + 1]
@@ -132,8 +132,8 @@ def main():
         " Seguiremos atentos a cualquier novedad. Mundo al Día."
     )
     narration = re.sub(r"\s+", " ", narration).strip()
-    if len(narration.split()) > 145:
-        narration = " ".join(narration.split()[:145]).rsplit(" ", 1)[0].rstrip(" ,;:") + "."
+    if len(narration.split()) > 130:
+        narration = " ".join(narration.split()[:130]).rsplit(" ", 1)[0].rstrip(" ,;:") + "."
 
 
     print("NOTICIA_DEL_SITIO=" + title)
