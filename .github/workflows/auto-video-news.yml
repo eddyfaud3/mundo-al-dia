@@ -1,4 +1,4 @@
-name: Crear borradores de vídeo — Mundo al Día
+name: Publicación automática de vídeos — Mundo al Día
 
 on:
   schedule:
@@ -10,13 +10,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: mundo-al-dia-auto-video
+  group: mundo-al-dia-auto-video-publicacion
   cancel-in-progress: false
 
 jobs:
   create-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Comprobar horario local de Nueva York
         id: schedule
@@ -96,11 +96,78 @@ jobs:
           print("Modo borrador: no se carga a Cloudinary ni se publica en Facebook o Instagram.")
           PY
 
-      - name: Guardar borrador como artefacto
+      - name: Subir MP4 a Cloudinary
         if: ${{ github.event_name == 'workflow_dispatch' || steps.schedule.outputs.run == 'true' }}
+        env:
+          CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDINARY_URL:-}" || { echo "::error::Falta CLOUDINARY_URL."; exit 1; }
+          npm install --no-save cloudinary
+          node --input-type=module <<'NODE'
+          import { v2 as cloudinary } from "cloudinary";
+          import { writeFile } from "node:fs/promises";
+          const uploaded = await cloudinary.uploader.upload(
+            "video-draft-output/mundo-al-dia-video-original.mp4",
+            { resource_type: "video", folder: "mundo-al-dia/videos",
+              public_id: `video-auto-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT}`,
+              overwrite: false }
+          );
+          if (!uploaded.secure_url?.startsWith("https://")) throw new Error("Cloudinary no devolvió una URL HTTPS.");
+          await writeFile("video-draft-output/public-video-url.txt", uploaded.secure_url + "\\n");
+          console.log("Vídeo almacenado en Cloudinary.");
+          NODE
+
+      - name: Publicar vídeo en el sitio, Facebook e Instagram
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.schedule.outputs.run == 'true' }}
+        env:
+          AUTOMATION_SECRET: ${{ secrets.MUNDO_AL_DIA_AUTOMATION_SECRET }}
+          SITE_URL: https://mundo-al-dia-github-production.up.railway.app
+          RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          test -n "${AUTOMATION_SECRET:-}" || { echo "::error::Falta MUNDO_AL_DIA_AUTOMATION_SECRET."; exit 1; }
+          export VIDEO_URL="$(cat video-draft-output/public-video-url.txt)"
+          python - <<'PY'
+          import json, os, urllib.request, urllib.error
+          with open("video-draft-output/video-metadata.json",encoding="utf-8") as f:
+              m=json.load(f)
+          payload={
+              "video_url":os.environ["VIDEO_URL"],
+              "title":m["title"],
+              "caption":(m.get("caption") or m.get("summary") or m["title"])[:1200],
+              "source_url":m["source_url"],
+              "run_id":os.environ["RUN_ID"].replace("-","_")
+          }
+          req=urllib.request.Request(
+              os.environ["SITE_URL"].rstrip("/")+"/api/automation/publish-video",
+              data=json.dumps(payload,ensure_ascii=False).encode("utf-8"),
+              headers={"Authorization":"Bearer "+os.environ["AUTOMATION_SECRET"],
+                       "Content-Type":"application/json"},
+              method="POST")
+          try:
+              with urllib.request.urlopen(req,timeout=180) as response:
+                  result=json.loads(response.read().decode("utf-8"))
+          except urllib.error.HTTPError as e:
+              print(e.read().decode("utf-8","replace"))
+              raise
+          print(json.dumps(result,ensure_ascii=False,indent=2))
+          if result.get("dry_run"):
+              raise SystemExit("VIDEO_AUTO_PUBLISH_ENABLED está apagado; no se publicó.")
+          if not result.get("site_published"):
+              raise SystemExit("El sitio no confirmó la publicación.")
+          if not result.get("facebook",{}).get("published"):
+              raise SystemExit("Facebook no confirmó la publicación; revisar antes de reintentar.")
+          if not result.get("instagram",{}).get("published"):
+              raise SystemExit("Instagram no confirmó la publicación; revisar antes de reintentar.")
+          print("CONFIRMADO: vídeo publicado en sitio, Facebook e Instagram.")
+          PY
+
+      - name: Guardar vídeo y comprobantes
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mundo-al-dia-video-automatico
           path: video-draft-output/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
