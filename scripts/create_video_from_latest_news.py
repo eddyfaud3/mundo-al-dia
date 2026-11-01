@@ -97,41 +97,44 @@ def main():
         )
 
     published, article, title, summary = candidates[0]
-    # Limpiar créditos/editoriales heredados del texto importado antes de enviarlo al narrador.
+    # Limpiar créditos editoriales sin borrar los hechos de las noticias.
     def narration_text(value):
         value = html.unescape(re.sub(r"<[^>]+>", " ", str(value or "")))
         value = re.sub(r"https?://\S+", " ", value, flags=re.IGNORECASE)
-        value = re.sub(
-            r"(?i)(?:esta noticia se prepar[oó] a partir de|esta informaci[oó]n fue publicada por|"
-            r"cobertura publicada por|consulta la fuente original|para verificar actualizaciones|"
-            r"fuente\s*:\s*).*(?=$|[.!?])",
-            " ", value
+        sentences = re.split(r"(?<=[.!?])\s+", value)
+        blocked = re.compile(
+            r"(?i)\b(?:fuente|fuentes|consulta la fuente original|"
+            r"esta noticia se prepar[oó] a partir de|esta informaci[oó]n fue publicada por|"
+            r"cobertura publicada por|para verificar actualizaciones)\b"
         )
-        value = re.sub(r"(?i)\b(?:fuente|fuentes)\s*:\s*[^.!?]*(?:[.!?]|$)", " ", value)
-        value = re.sub(r"\s+", " ", value).strip(" .;:-")
-        return value
+        kept = [s.strip() for s in sentences if s.strip() and not blocked.search(s)]
+        return re.sub(r"\s+", " ", " ".join(kept)).strip(" .;:-")
 
     full_summary = narration_text(summary)
     if len(full_summary) < 60:
         raise SystemExit("La noticia no contiene suficiente información limpia para narrarla.")
-    full_summary = full_summary[:3900].strip()
-    if len(full_summary) > 3900:
-        last_sentence = max(full_summary.rfind(". "), full_summary.rfind("! "), full_summary.rfind("? "))
-        if last_sentence >= 1800:
-            full_summary = full_summary[:last_sentence + 1].strip()
+
+    # Objetivo: 45–60 segundos. Se limita el resumen a unas 125 palabras.
+    words = full_summary.split()
+    if len(words) > 125:
+        shortened = " ".join(words[:125])
+        last_stop = max(shortened.rfind(". "), shortened.rfind("! "), shortened.rfind("? "))
+        if last_stop >= 420:
+            shortened = shortened[:last_stop + 1]
         else:
-            full_summary = full_summary.rsplit(" ", 1)[0].rstrip(" ,;:") + "."
+            shortened = shortened.rsplit(" ", 1)[0].rstrip(" ,;:") + "."
+        full_summary = shortened
     # Publicación social: solo hashtags, sin enlaces ni créditos de fuentes externas.
     caption_summary = "#MundoAlDia #UltimaHora #Noticias #NoticiasInternacionales #Actualidad"
     article_url = SITE_URL + "/noticia/" + urllib.parse.quote(article["slug"], safe="")
     narration = (
         "Última hora. " + title + ". " + full_summary +
-        " Seguiremos atentos a cualquier novedad. "
-        "Mundo al Día. El mundo, al día."
+        " Seguiremos atentos a cualquier novedad. Mundo al Día."
     )
     narration = re.sub(r"\s+", " ", narration).strip()
-    if len(narration) > 4300:
-        narration = narration[:4290].rsplit(" ", 1)[0] + "."
+    if len(narration.split()) > 145:
+        narration = " ".join(narration.split()[:145]).rsplit(" ", 1)[0].rstrip(" ,;:") + "."
+
 
     print("NOTICIA_DEL_SITIO=" + title)
     print("ARTICULO=" + article_url)
