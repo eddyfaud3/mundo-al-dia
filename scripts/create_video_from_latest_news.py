@@ -110,8 +110,8 @@ def main():
     article_url = SITE_URL + "/noticia/" + urllib.parse.quote(article["slug"], safe="")
     narration = (
         "Última hora. " + title + ". " + full_summary +
-        " Esta es la información publicada por Mundo al Día. "
-        "Seguiremos atentos a las actualizaciones. Mundo al Día. El mundo, al día."
+        " Seguiremos atentos a cualquier novedad. "
+        "Mundo al Día. El mundo, al día."
     )
     narration = re.sub(r"\s+", " ", narration).strip()
     if len(narration) > 4300:
