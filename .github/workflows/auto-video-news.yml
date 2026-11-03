@@ -2,8 +2,12 @@ name: Publicación automática de vídeos — Mundo al Día
 
 on:
   schedule:
-    # GitHub usa UTC; estas cuatro horas cubren EDT y EST. El filtro TZ elige solo 10:00 y 19:00 de Nueva York.
-    - cron: "0 14,15,23,0 * * *"
+    # Una ejecución por horario local: 14/23 UTC en EDT y 15/00 UTC en EST.
+    # El filtro compara el cron original con el desfase horario, aunque GitHub inicie tarde.
+    - cron: "0 14 * * *"
+    - cron: "0 15 * * *"
+    - cron: "0 23 * * *"
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 permissions:
@@ -20,18 +24,35 @@ jobs:
     steps:
       - name: Validar el horario programado de Nueva York
         id: schedule
+        env:
+          SCHEDULE_CRON: ${{ github.event.schedule }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          local_hour="$(TZ=America/New_York date +%H)"
           local_time="$(TZ=America/New_York date +%Y-%m-%dT%H:%M:%S%z)"
+          local_offset="$(TZ=America/New_York date +%z)"
           run=false
-          if [ "$local_hour" = "10" ] || [ "$local_hour" = "19" ]; then
+
+          # Los eventos programados conservan su expresión cron original aunque
+          # GitHub Actions tarde horas en iniciar el runner. Así no dependemos
+          # de que la hora actual siga siendo exactamente 10:00 o 19:00.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             run=true
+          else
+            case "$SCHEDULE_CRON" in
+              "0 14 * * *"|"0 23 * * *") expected_offset="-0400" ;;
+              "0 15 * * *"|"0 0 * * *") expected_offset="-0500" ;;
+              *) expected_offset="unknown" ;;
+            esac
+            if [ "$local_offset" = "$expected_offset" ]; then
+              run=true
+            fi
           fi
+
           echo "run=$run" >> "$GITHUB_OUTPUT"
-          echo "Hora local de Nueva York: $local_time; ejecutar: $run"
+          echo "Cron recibido: ${SCHEDULE_CRON:-manual}; hora Nueva York: $local_time; desfase: $local_offset; ejecutar: $run"
           if [ "$run" != "true" ]; then
-            echo "Esta ejecución UTC no corresponde a las 10:00 ni a las 19:00 de Nueva York; se omite."
+            echo "Se omite esta ejecución porque el cron no corresponde al horario de Nueva York en vigor."
           fi
 
       - name: Descargar el código probado
