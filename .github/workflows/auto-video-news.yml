@@ -2,7 +2,7 @@ name: Publicación automática de vídeos — Mundo al Día
 
 on:
   schedule:
-    # GitHub usa UTC. Se cubren los dos cambios de horario de Nueva York.
+    # GitHub usa UTC; estas cuatro horas cubren EDT y EST. El filtro TZ elige solo 10:00 y 19:00 de Nueva York.
     - cron: "0 14,15,23,0 * * *"
   workflow_dispatch:
 
@@ -20,25 +20,18 @@ jobs:
     steps:
       - name: Validar el horario programado de Nueva York
         id: schedule
-        env:
-          SCHEDULE_CRON: ${{ github.event.schedule }}
         run: |
           set -euo pipefail
-          offset="$(TZ=America/New_York date +%z)"
+          local_hour="$(TZ=America/New_York date +%H)"
+          local_time="$(TZ=America/New_York date +%Y-%m-%dT%H:%M:%S%z)"
           run=false
-          if [ "$offset" = "-0400" ]; then
-            case "$SCHEDULE_CRON" in
-              "0 14 * * *"|"0 23 * * *") run=true ;;
-            esac
-          elif [ "$offset" = "-0500" ]; then
-            case "$SCHEDULE_CRON" in
-              "0 15 * * *"|"0 0 * * *") run=true ;;
-            esac
+          if [ "$local_hour" = "10" ] || [ "$local_hour" = "19" ]; then
+            run=true
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
-          echo "Cron recibido: $SCHEDULE_CRON; zona Nueva York: $offset; ejecutar: $run"
+          echo "Hora local de Nueva York: $local_time; ejecutar: $run"
           if [ "$run" != "true" ]; then
-            echo "Ejecución duplicada para el cambio de horario; se omite."
+            echo "Esta ejecución UTC no corresponde a las 10:00 ni a las 19:00 de Nueva York; se omite."
           fi
 
       - name: Descargar el código probado
