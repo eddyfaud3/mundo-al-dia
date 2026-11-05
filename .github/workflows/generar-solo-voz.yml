@@ -1,0 +1,70 @@
+name: Generar solo voz en español — Mundo al Día
+
+on:
+  workflow_dispatch:
+    inputs:
+      narration:
+        description: "Texto completo de la narración en español"
+        required: true
+        type: string
+      voice:
+        description: "Voz española"
+        required: true
+        type: choice
+        options:
+          - es-MX-DaliaNeural
+          - es-MX-JorgeNeural
+          - es-ES-ElviraNeural
+        default: es-MX-DaliaNeural
+
+permissions:
+  contents: read
+
+jobs:
+  generate-audio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Instalar Edge TTS
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install edge-tts
+
+      - name: Generar únicamente el archivo MP3
+        env:
+          NARRATION: ${{ inputs.narration }}
+          VOICE: ${{ inputs.voice }}
+        run: |
+          set -euo pipefail
+          mkdir -p audio-output
+          python - <<'PY'
+          import asyncio
+          import os
+          import edge_tts
+
+          async def main():
+              text = os.environ["NARRATION"].strip()
+              voice = os.environ["VOICE"]
+              if len(text) < 20:
+                  raise ValueError("La narración es demasiado corta.")
+              communicate = edge_tts.Communicate(
+                  text=text,
+                  voice=voice,
+                  rate="-4%",
+                  volume="+0%",
+                  pitch="+0Hz",
+              )
+              await communicate.save("audio-output/narracion_es.mp3")
+
+          asyncio.run(main())
+          PY
+          test -s audio-output/narracion_es.mp3
+          echo "MP3 generado correctamente. No se creó vídeo ni se publicó en redes."
+
+      - name: Entregar MP3 como artefacto descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: mundo-al-dia-voz-espanol
+          path: audio-output/narracion_es.mp3
+          if-no-files-found: error
+          retention-days: 7
