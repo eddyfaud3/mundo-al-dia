@@ -1,0 +1,110 @@
+name: Video Paraguay — crisis Ueno Bank | Mundo al Día
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: "Titular revisado"
+        required: true
+        type: string
+        default: "CRISIS EN PARAGUAY: UENO BANK, PROTESTAS Y JUICIO POLÍTICO"
+      summary:
+        description: "Resumen verificado para la descripción del video"
+        required: true
+        type: string
+        default: "La intervención de Ueno Bank desató una crisis financiera y política en Paraguay. El banco tenía cerca de 2,9 millones de clientes. Santiago Peña presentó su renuncia, pero el Congreso no logró aceptarla por falta de quórum y el proceso de juicio político continúa."
+      narration:
+        description: "Narración en español corregida; se generará con voz masculina natural"
+        required: true
+        type: string
+        default: "¡Última hora! Paraguay vive una crisis bancaria y política tras la intervención de Ueno Bank. El Banco Central detectó que el capital de la entidad cayó a menos de la mitad del mínimo legal. Ueno tenía cerca de 2,9 millones de clientes y la interrupción de sus servicios dejó a numerosos usuarios sin acceso inmediato a sus ahorros. Las protestas se extendieron por Asunción. En medio de la presión, el presidente Santiago Peña presentó su renuncia. Pero la Cámara de Diputados aprobó por unanimidad, con 78 votos, iniciar un juicio político. La sesión conjunta del Congreso que debía decidir sobre la renuncia quedó sin quórum después de que legisladores oficialistas abandonaran el recinto. Por eso, la renuncia no fue aceptada y Peña continúa en el cargo mientras el Senado prepara la continuación del proceso. El fondo de garantía anunció que comenzaría a devolver los depósitos cubiertos. La pregunta ahora es: ¿quién responderá por los ahorros y los empleos afectados? ¿Qué opinas? Te leemos en los comentarios. Mundo al Día. El mundo, al día."
+      source_url:
+        description: "Páginas con fotos de AP y del Banco Central (Wikimedia Commons); no publicar fotos protegidas sin licencia"
+        required: true
+        type: string
+        default: "https://gmg-kprc-prod.cdn.arcpublishing.com/gallery/news/2026/11/05/paraguay-president-santiago-pena-resigns-following-bank-collapse/;https://www.clickorlando.com/gallery/news/2026/11/03/paraguay-seizes-major-digital-bank-tied-to-president-leaving-millions-of-customers-in-limbo/;https://commons.wikimedia.org/wiki/File:Banco_Central_del_Paraguay_by_Felipe_M%C3%A9ndez.jpg"
+
+permissions:
+  contents: read
+
+jobs:
+  create-paraguay-draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar herramientas
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade pillow edge-tts CairoSVG
+          python -c "import cairosvg; print('CairoSVG OK:', cairosvg.__version__)"
+
+      - name: Crear borrador con fotos de las fuentes y narración corregida
+        env:
+          STORY_TITLE: ${{ inputs.title }}
+          STORY_SUMMARY: ${{ inputs.summary }}
+          STORY_NARRATION: ${{ inputs.narration }}
+          STORY_SOURCE_URL: ${{ inputs.source_url }}
+          MUNDO_AL_DIA_TTS_VOICE: "es-MX-JorgeNeural"
+          MUNDO_AL_DIA_TTS_RATE: "-5%"
+        run: |
+          set -euo pipefail
+          python scripts/create_paraguay_video_draft.py \
+            --title "$STORY_TITLE" \
+            --summary "$STORY_SUMMARY" \
+            --narration "$STORY_NARRATION" \
+            --source-url "$STORY_SOURCE_URL"
+
+      - name: Convertir a MP4 compatible con iPhone y Facebook Reels
+        run: |
+          set -euo pipefail
+          input="video-draft-output/mundo-al-dia-video-original.mp4"
+          output="video-draft-output/mundo-al-dia-video-compatible.mp4"
+          test -s "$input"
+          ffmpeg -y -i "$input" \
+            -c:v libx264 -profile:v baseline -level 4.0 -pix_fmt yuv420p \
+            -r 30 -crf 23 -preset medium \
+            -c:a aac -b:a 128k -ar 44100 -ac 2 \
+            -movflags +faststart "$output"
+          mv "$output" "$input"
+          test -s "$input"
+
+      - name: Verificar MP4, resolución y pistas
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          video = Path("video-draft-output/mundo-al-dia-video-original.mp4")
+          audio = Path("video-draft-output/narracion_es.mp3")
+          assert video.is_file() and video.stat().st_size > 10000, "No se generó el MP4."
+          assert audio.is_file() and audio.stat().st_size > 1000, "No se generó la narración."
+          raw = subprocess.check_output([
+              "ffprobe", "-v", "error", "-show_streams", "-show_format",
+              "-of", "json", str(video)
+          ], text=True)
+          info = json.loads(raw)
+          streams = info.get("streams", [])
+          v = next((s for s in streams if s.get("codec_type") == "video"), None)
+          a = next((s for s in streams if s.get("codec_type") == "audio"), None)
+          assert v and a, "Falta la pista de vídeo o audio."
+          assert (v.get("width"), v.get("height")) == (1080, 1920), "Formato vertical 1080x1920 no confirmado."
+          assert v.get("codec_name") == "h264" and v.get("pix_fmt") == "yuv420p", "Códec de vídeo inesperado."
+          assert a.get("codec_name") == "aac", "Códec de audio inesperado."
+          print("MP4 verificado: 1080x1920, H.264, AAC. Borrador sin publicar.")
+          PY
+
+      - name: Guardar borrador y créditos como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: mundo-al-dia-paraguay-ueno-video
+          path: video-draft-output/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Confirmar que no se publicó en redes
+        run: echo "PUBLICADO=NO — descargar, revisar y confirmar derechos de cada foto antes de publicar."
