@@ -38,7 +38,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Prepare one verified-source news post
+      - name: Validate Python syntax
+        run: python -m py_compile scripts/x_news_publisher.py
+      - name: Prepare one RSS-sourced news post
         run: python scripts/x_news_publisher.py
       - name: Save draft or publication receipt
         if: always()
