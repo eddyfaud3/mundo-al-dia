@@ -9,26 +9,29 @@ En el repositorio, abre **Settings → Secrets and variables → Actions → New
 - `OPENAI_API_KEY`: clave de API de OpenAI para redactar el post en español.
 - `X_USER_ACCESS_TOKEN`: token OAuth 2.0 de usuario de X para la cuenta Mundo al Día.
 
-El token de X debe pertenecer a una aplicación de desarrollador autorizada por el propietario de la cuenta y tener los permisos de usuario necesarios para leer los posts recientes y publicar: `users.read`, `tweet.read` y `tweet.write`. La aplicación debe usar autenticación de usuario OAuth 2.0 (Authorization Code with PKCE) y el propietario debe autorizar expresamente estas acciones.
+El token de X debe pertenecer a una aplicación de desarrollador autorizada por el propietario de la cuenta y tener los permisos `users.read`, `tweet.read` y `tweet.write`. Usa OAuth 2.0 Authorization Code with PKCE y autoriza expresamente la aplicación. Nunca pegues tokens ni claves en el código, en un issue ni en este chat.
 
-## Variable de seguridad
+## Interruptor de publicación
 
 En **Settings → Secrets and variables → Actions → Variables**, crea:
 
-- `X_AUTO_PUBLISH_ENABLED` = `false` inicialmente.
+- `X_AUTO_PUBLISH_ENABLED` = `false`.
 
-Solo después de validar credenciales, revisar el contenido de prueba y dar aprobación expresa, cambia esta variable a `true` para permitir las publicaciones programadas. El disparo manual también tiene una opción explícita de publicación; déjala desactivada para pruebas.
+Debe permanecer en `false` durante las pruebas. La opción manual `publish` también debe quedar desactivada en los ensayos. Solo el propietario debe cambiar el interruptor a `true` después de revisar un borrador, confirmar las credenciales y aprobar el primer post real.
 
 ## Horario
 
-El workflow tiene tres ejecuciones diarias en UTC: 12:00, 17:00 y 23:00. Equivalen aproximadamente a 7/8 a. m., 12/1 p. m. y 6/7 p. m. en la hora del Este, según el horario de verano.
+El workflow tiene tres ejecuciones diarias en UTC: 12:00, 17:00 y 23:00. En la hora del Este corresponden aproximadamente a 7 a. m., mediodía y 6 p. m. durante el horario estándar; en horario de verano se desplazan una hora. GitHub Actions usa UTC, por lo que el horario local cambia con el DST.
 
-## Alcance y límites actuales
+## Reglas editoriales y límites
 
 - Fuentes RSS: DW Español, BBC News Mundo y France 24 Español.
-- Una publicación por ejecución, con enlace a la fuente original.
-- Comprueba los últimos posts de la cuenta para evitar repetir un enlace reciente.
-- La primera versión utiliza titular y descripción RSS; no sustituye una verificación editorial independiente de varias fuentes ni una revisión de derechos de imágenes.
+- Solo se procesa una noticia si los titulares tienen coincidencia suficiente entre al menos dos medios distintos. Si no hay coincidencia, el flujo se detiene sin publicar.
+- El enlace incluido es el de la noticia original del medio seleccionado.
+- OpenAI redacta en español usando los datos de la nota enlazada; no debe inventar datos, citas ni cifras.
+- Antes de publicar, consulta los últimos 20 posts de la cuenta para evitar repetir el mismo enlace.
+- No adjunta imágenes ni videos; no se ha comprobado ningún derecho de uso de medios.
+- No sustituye la verificación editorial humana, especialmente en noticias de última hora, conflictos, víctimas o temas sensibles.
 - No automatiza likes, follows, respuestas no solicitadas ni mensajes directos.
-- No se publica nada si el interruptor está apagado.
 - Los workflows programados de GitHub solo se ejecutan desde la rama predeterminada; este PR debe revisarse y fusionarse antes de que empiece el horario automático.
+- Sin `OPENAI_API_KEY`, el proceso se detiene. Sin `X_USER_ACCESS_TOKEN`, la publicación se detiene. La publicación también queda bloqueada mientras el interruptor esté apagado.
