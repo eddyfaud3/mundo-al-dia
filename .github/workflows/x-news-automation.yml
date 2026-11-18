@@ -1,6 +1,12 @@
 name: Mundo al Día — X News Automation
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/x-news-automation.yml"
+      - "scripts/x_news_publisher.py"
+      - "tests/test_x_news_publisher.py"
   schedule:
     # UTC schedule: 12:00, 17:00, 23:00; Eastern local time shifts with DST.
     - cron: "0 12 * * *"
@@ -22,7 +28,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout pull request branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate Python syntax
+        run: python -m py_compile scripts/x_news_publisher.py tests/test_x_news_publisher.py
+      - name: Test conservative multi-source filter
+        run: python -m unittest discover -s tests -p "test_x_news_publisher.py" -v
+
   prepare-and-publish:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -38,9 +61,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Validate Python syntax
-        run: python -m py_compile scripts/x_news_publisher.py tests/test_x_news_publisher.py
-      - name: Test conservative multi-source filter
-        run: python -m unittest discover -s tests -p "test_x_news_publisher.py" -v
+        run: python -m py_compile scripts/x_news_publisher.py
       - name: Prepare one corroborated RSS-sourced news post
         run: python scripts/x_news_publisher.py
       - name: Save draft or publication receipt
