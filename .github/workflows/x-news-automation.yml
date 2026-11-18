@@ -2,8 +2,7 @@ name: Mundo al Día — X News Automation
 
 on:
   schedule:
-    # 3 daily runs: approximately morning, midday, and evening in US Eastern time.
-    # GitHub cron uses UTC; local clock shifts by one hour with daylight saving time.
+    # UTC schedule: 12:00, 17:00, 23:00; Eastern local time shifts with DST.
     - cron: "0 12 * * *"
     - cron: "0 17 * * *"
     - cron: "0 23 * * *"
@@ -39,8 +38,10 @@ jobs:
         with:
           python-version: "3.12"
       - name: Validate Python syntax
-        run: python -m py_compile scripts/x_news_publisher.py
-      - name: Prepare one RSS-sourced news post
+        run: python -m py_compile scripts/x_news_publisher.py tests/test_x_news_publisher.py
+      - name: Test conservative multi-source filter
+        run: python -m unittest discover -s tests -p "test_x_news_publisher.py" -v
+      - name: Prepare one corroborated RSS-sourced news post
         run: python scripts/x_news_publisher.py
       - name: Save draft or publication receipt
         if: always()
