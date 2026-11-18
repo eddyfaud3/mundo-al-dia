@@ -110,7 +110,10 @@ def main():
         raise SystemExit("No hay noticias recientes con descripción suficiente; no se publica.")
     token = os.getenv("X_USER_ACCESS_TOKEN", "").strip()
     openai_key = os.getenv("OPENAI_API_KEY", "").strip()
-    publish_enabled = (os.getenv("X_AUTO_PUBLISH_ENABLED", "false").lower() == "true"\n                      or os.getenv("X_PUBLISH_REQUESTED", "false").lower() == "true")
+    publish_enabled = (
+        os.getenv("X_AUTO_PUBLISH_ENABLED", "false").lower() == "true"
+        or os.getenv("X_PUBLISH_REQUESTED", "false").lower() == "true"
+    )
 
     recent_texts = []
     if publish_enabled:
