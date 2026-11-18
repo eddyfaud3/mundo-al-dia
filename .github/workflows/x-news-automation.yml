@@ -1,0 +1,50 @@
+name: Mundo al Día — X News Automation
+
+on:
+  schedule:
+    # 3 daily runs: approximately morning, midday, and evening in US Eastern time.
+    # GitHub cron uses UTC; local clock shifts by one hour with daylight saving time.
+    - cron: "0 12 * * *"
+    - cron: "0 17 * * *"
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish this post to X now (requires X credentials and explicit consent)"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mundo-al-dia-x-news
+  cancel-in-progress: false
+
+jobs:
+  prepare-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      X_USER_ACCESS_TOKEN: ${{ secrets.X_USER_ACCESS_TOKEN }}
+      X_AUTO_PUBLISH_ENABLED: ${{ vars.X_AUTO_PUBLISH_ENABLED }}
+      X_PUBLISH_REQUESTED: ${{ inputs.publish }}
+    steps:
+      - name: Checkout isolated X automation branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Prepare one verified-source news post
+        run: python scripts/x_news_publisher.py
+      - name: Save draft or publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mundo-al-dia-x-post-${{ github.run_number }}
+          path: x-draft.json
+          if-no-files-found: ignore
+          retention-days: 14
